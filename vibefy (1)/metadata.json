@@ -1,0 +1,6 @@
+{
+  "name": "Vibefy",
+  "description": "App Android nativa de streaming de música estilo Spotify con reproductor Media3 ExoPlayer, catálogo, playlists, descargas offline, Firebase Auth, AdMob y OneSignal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

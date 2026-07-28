@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "977305874775",
+    "project_id": "kinemaxmusic",
+    "storage_bucket": "kinemaxmusic.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:977305874775:android:a67180de68d529b8c44e12",
+        "android_client_info": {
+          "package_name": "com.aistudio.kinemaxmusic.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "977305874775-h6k9l1u14ai31pmfl7psth06bedksmv1.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.aistudio.kinemaxmusic.app",
+            "certificate_hash": "a290c9cdce5478e23fe167025bca7ebbad112410"
+          }
+        },
+        {
+          "client_id": "977305874775-rp5imu9qro50hfv0gapssn2vhsnkdao0.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCWCZspRvCciPg1vLp9k-Lshz0OqTSgXhk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "977305874775-rp5imu9qro50hfv0gapssn2vhsnkdao0.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
