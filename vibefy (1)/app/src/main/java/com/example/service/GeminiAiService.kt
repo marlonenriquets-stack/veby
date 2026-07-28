@@ -1,6 +1,7 @@
 package com.example.service
 
 import android.util.Log
+import com.example.BuildConfig
 import com.example.data.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,7 +15,7 @@ import java.util.concurrent.TimeUnit
 
 object GeminiAiService {
 
-    private const val MODEL_NAME = "gemini-1.5-flash"
+    private const val MODEL_NAME = "gemini-3.5-flash"
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL_NAME:generateContent"
 
     private val okHttpClient = OkHttpClient.Builder()
@@ -24,7 +25,15 @@ object GeminiAiService {
         .build()
 
     private fun getApiKey(): String {
-        return "AIzaSyDemoKeyVibefyGeminiApi2026"
+        return try {
+            val key = BuildConfig.GEMINI_API_KEY
+            if (key.isNull_or_empty() || key == "MY_GEMINI_API_KEY") {
+                // Return default fallback key if empty
+                "AIzaSyDemoKeyVibefyGeminiApi2026"
+            } else key
+        } catch (e: Exception) {
+            "AIzaSyDemoKeyVibefyGeminiApi2026"
+        }
     }
 
     private fun String?.isNull_or_empty(): Boolean = this == null || this.trim().isEmpty()
