@@ -66,6 +66,7 @@ fun ArtistProfileScreen(
     onFavoriteClick: (Song) -> Unit,
     onDownloadClick: (Song) -> Unit,
     onAddToPlaylistClick: (Song) -> Unit,
+    onAlbumClick: (ArtistAlbum) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -234,7 +235,10 @@ fun ArtistProfileScreen(
                                 horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
                                 items(albumes) { album ->
-                                    ArtistAlbumCard(album = album)
+                                    ArtistAlbumCard(
+                                        album = album,
+                                        onClick = { onAlbumClick(album) }
+                                    )
                                 }
                             }
                         }
@@ -283,10 +287,13 @@ fun ArtistProfileScreen(
 @Composable
 private fun ArtistAlbumCard(
     album: ArtistAlbum,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
-        modifier = modifier.width(140.dp),
+        modifier = modifier
+            .width(140.dp)
+            .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = KinemaxSurface)
     ) {

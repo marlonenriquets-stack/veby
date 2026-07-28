@@ -7,8 +7,12 @@ import com.squareup.moshi.JsonClass
 data class ArtistAlbum(
     @Json(name = "nombre") val nombre: String = "",
     @Json(name = "portada_url") val portadaUrl: String? = null,
-    @Json(name = "num_canciones") val numCanciones: Int? = 0
-)
+    @Json(name = "num_canciones") val numCanciones: Int? = 0,
+    @Json(name = "canciones") val canciones: List<Song>? = emptyList()
+) {
+    val songList: List<Song>
+        get() = canciones ?: emptyList()
+}
 
 @JsonClass(generateAdapter = true)
 data class FullArtistProfile(

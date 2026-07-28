@@ -59,6 +59,8 @@ import com.example.ui.MainViewModel
 import com.example.ui.components.FullPlayerBottomSheet
 import com.example.ui.components.MiniPlayerBar
 import com.example.ui.components.PremiumDialog
+import com.example.data.model.ArtistAlbum
+import com.example.ui.screens.artist.AlbumDetailScreen
 import com.example.ui.screens.artist.ArtistProfileScreen
 import com.example.ui.screens.auth.LoginRegisterScreen
 import com.example.ui.screens.home.HomeScreen
@@ -109,6 +111,7 @@ fun KinemaxNavGraph(
     var showAudioSettings by remember { mutableStateOf(false) }
     var selectedSongForPlaylistDialog by remember { mutableStateOf<Song?>(null) }
     var selectedArtistId by remember { mutableStateOf<Long?>(null) }
+    var selectedAlbum by remember { mutableStateOf<ArtistAlbum?>(null) }
 
     val selectedArtistProfile by viewModel.selectedArtistProfile.collectAsState()
     val isLoadingArtistProfile by viewModel.isLoadingArtistProfile.collectAsState()
@@ -232,7 +235,20 @@ fun KinemaxNavGraph(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (selectedArtistId != null) {
+            if (selectedAlbum != null) {
+                AlbumDetailScreen(
+                    album = selectedAlbum!!,
+                    artistName = selectedArtistProfile?.nombre ?: "Artista",
+                    currentPlayingSong = currentPlayingSong,
+                    isPlaying = isPlaying,
+                    permiteDescargas = currentUser?.permiteDescargas ?: false,
+                    onBackClick = { selectedAlbum = null },
+                    onSongClick = { song, playlist -> viewModel.playSong(song, playlist, activity) },
+                    onFavoriteClick = { viewModel.toggleFavorite(it) },
+                    onDownloadClick = { viewModel.downloadSong(it) },
+                    onAddToPlaylistClick = { selectedSongForPlaylistDialog = it }
+                )
+            } else if (selectedArtistId != null) {
                 ArtistProfileScreen(
                     artistProfile = selectedArtistProfile,
                     isLoading = isLoadingArtistProfile,
@@ -246,7 +262,8 @@ fun KinemaxNavGraph(
                     onSongClick = { song, playlist -> viewModel.playSong(song, playlist, activity) },
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
                     onDownloadClick = { viewModel.downloadSong(it) },
-                    onAddToPlaylistClick = { selectedSongForPlaylistDialog = it }
+                    onAddToPlaylistClick = { selectedSongForPlaylistDialog = it },
+                    onAlbumClick = { album -> selectedAlbum = album }
                 )
             } else if (showAudioSettings) {
                 com.example.ui.screens.settings.AudioSettingsScreen(
