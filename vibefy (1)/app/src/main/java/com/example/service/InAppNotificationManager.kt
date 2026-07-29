@@ -52,7 +52,6 @@ object InAppNotificationManager {
             id = UUID.randomUUID().toString(),
             title = title,
             message = message,
-            timestamp = System.currentTimeMillis(),
             isRead = false,
             songId = songId,
             type = type
