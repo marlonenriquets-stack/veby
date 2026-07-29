@@ -26,14 +26,6 @@ android {
     buildConfigField("String", "GEMINI_API_KEY", "\"AIzaSyDemoKeyVibefyGeminiApi2026\"")
   }
 
-  kotlinOptions {
-    jvmTarget = "11"
-    freeCompilerArgs = freeCompilerArgs + listOf(
-      "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
-      "-nowarn"
-    )
-  }
-
   signingConfigs {
     create("release") {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
@@ -73,6 +65,17 @@ android {
   }
 
   testOptions { unitTests { isIncludeAndroidResources = true } }
+}
+
+// Configuración correcta de compilación de Kotlin en Kotlin DSL (fuera del bloque android)
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile>().configureEach {
+  compilerOptions {
+    jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+    freeCompilerArgs.addAll(
+      "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+      "-nowarn"
+    )
+  }
 }
 
 secrets {
