@@ -36,7 +36,7 @@ object PushNotificationManager {
             if (!email.isNullOrEmpty()) {
                 OneSignal.User.addEmail(email)
             }
-            Log.d(TAG, "Usuario registrado en OneSignal: $userId ($email)")
+            Log.d(TAG, "Usuario registrado en OneSignal: $userId")
         } catch (e: Exception) {
             Log.e(TAG, "Error al registrar usuario en OneSignal", e)
         }
