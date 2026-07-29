@@ -55,7 +55,11 @@ fun QueueBottomSheet(
         sheetState = sheetState,
         containerColor = KinemaxSurface
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp)
+        ) {
             Text(
                 text = "Cola de reproducción",
                 style = MaterialTheme.typography.titleLarge,
@@ -122,7 +126,9 @@ private fun QueueRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
-            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)),
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(6.dp)),
             contentAlignment = Alignment.Center
         ) {
             AsyncImage(
@@ -132,7 +138,11 @@ private fun QueueRow(
                 modifier = Modifier.size(48.dp)
             )
             if (isCurrent) {
-                Box(modifier = Modifier.size(48.dp).background(Color.Black.copy(alpha = 0.4f)))
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color.Black.copy(alpha = 0.4f))
+                )
                 Icon(
                     imageVector = Icons.Default.Equalizer,
                     contentDescription = "Sonando ahora",
@@ -144,7 +154,9 @@ private fun QueueRow(
 
         Spacer(modifier = Modifier.width(12.dp))
 
-        Column(modifier = Modifier.weight(1f)) {
+        Column(
+            modifier = Modifier.weight(1f)
+        ) {
             Text(
                 text = song.titulo,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal),
@@ -163,10 +175,18 @@ private fun QueueRow(
 
         if (onRemove != null) {
             IconButton(onClick = onRemove) {
-                Icon(imageVector = Icons.Default.Close, contentDescription = "Quitar de la cola", tint = KinemaxTextSecondary)
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "Quitar de la cola",
+                    tint = KinemaxTextSecondary
+                )
             }
         } else {
-            Icon(imageVector = Icons.Default.DragHandle, contentDescription = null, tint = KinemaxTextSecondary.copy(alpha = 0.3f))
+            Icon(
+                imageVector = Icons.Default.DragHandle,
+                contentDescription = null,
+                tint = KinemaxTextSecondary.copy(alpha = 0.3f)
+            )
         }
     }
 }
