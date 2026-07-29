@@ -142,6 +142,7 @@ private fun QueueRow(
             }
         }
 
+        // ✅ AQUÍ ESTABA EL ERROR: Se cambió Spacer(Modifier.padding(...)) por Spacer(Modifier.width(12.dp))
         Spacer(modifier = Modifier.width(12.dp))
 
         Column(modifier = Modifier.weight(1f)) {
