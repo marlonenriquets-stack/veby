@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Equalizer
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -38,6 +40,7 @@ import com.example.ui.theme.KinemaxAccent
 import com.example.ui.theme.KinemaxSurface
 import com.example.ui.theme.KinemaxTextSecondary
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun QueueBottomSheet(
     currentSong: Song?,
@@ -139,9 +142,9 @@ private fun QueueRow(
             }
         }
 
-        Spacer(modifier = Modifier.padding(horizontal = 6.dp))
+        Spacer(modifier = Modifier.width(12.dp))
 
-        Column(modifier = Modifier.weight(1f).padding(start = 6.dp)) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = song.titulo,
                 style = MaterialTheme.typography.bodyMedium.copy(fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal),
