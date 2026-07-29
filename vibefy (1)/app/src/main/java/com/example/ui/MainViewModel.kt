@@ -1,5 +1,10 @@
 package com.example.ui
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import android.app.Activity
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
