@@ -1,10 +1,5 @@
 package com.example.ui
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import android.app.Activity
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -15,21 +10,23 @@ import androidx.work.WorkManager
 import com.example.billing.BillingManager
 import com.example.data.local.AudioSettingsDataStore
 import com.example.data.local.UserSessionManager
-import com.example.data.model.FullArtistProfile
 import com.example.data.model.AlbumDetailApiResponse
+import com.example.data.model.FullArtistProfile
 import com.example.data.model.Genre
 import com.example.data.model.HomeAlbum
+import com.example.data.model.InAppNotification
 import com.example.data.model.Playlist
 import com.example.data.model.Song
 import com.example.data.model.SubscriptionPlan
 import com.example.data.model.User
+import com.example.data.remote.NetworkErrorTracker
 import com.example.data.repository.MusicRepository
 import com.example.player.KinemaxAudioPlayer
 import com.example.service.AdManager
 import com.example.service.DownloadWorker
 import com.example.service.GeminiAiService
+import com.example.service.InAppNotificationManager
 import com.example.service.PushNotificationManager
-import com.example.data.remote.NetworkErrorTracker
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -76,10 +73,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _topSongs = MutableStateFlow<List<Song>>(emptyList())
     private val _catalog = MutableStateFlow<List<Song>>(emptyList())
 
-    // Se combinan con favoriteSongsFlow para que song.isFavorite (y por lo
-    // tanto el corazón en la UI) siempre refleje el estado real guardado
-    // localmente — antes se quedaba pegado en "false" para siempre porque
-    // el catálogo del servidor nunca sabe cuáles son tus favoritos.
     val topSongs: StateFlow<List<Song>> = combine(_topSongs, repository.favoriteSongsFlow) { songs, favs ->
         val favIds = favs.map { it.id }.toSet()
         songs.map { it.copy(isFavorite = it.id in favIds) }
@@ -176,8 +169,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         initialValue = emptyList()
     )
 
-    // La canción sonando ahora, con isFavorite sincronizado — para que el
-    // corazón del reproductor completo también refleje el estado real.
     val currentPlayingSong: StateFlow<Song?> = combine(audioPlayer.currentSong, repository.favoriteSongsFlow) { song, favs ->
         song?.copy(isFavorite = favs.any { it.id == song.id })
     }.stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null)
@@ -209,25 +200,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _showQueueSheet = MutableStateFlow(false)
     val showQueueSheet: StateFlow<Boolean> = _showQueueSheet.asStateFlow()
 
-    // OneSignal Push & In-App Notifications State
-    val inAppNotifications = PushNotificationManager.notifications
-    val currentNotificationBanner = PushNotificationManager.currentBanner
-    val unreadNotificationCount = PushNotificationManager.unreadCount
+    // In-App Notifications State
+    val inAppNotifications: StateFlow<List<InAppNotification>> = InAppNotificationManager.notifications
+    val currentNotificationBanner: StateFlow<InAppNotification?> = InAppNotificationManager.currentBanner
+    val unreadNotificationCount: StateFlow<Int> = InAppNotificationManager.unreadCount
 
     private val _showNotificationsCenter = MutableStateFlow(false)
     val showNotificationsCenter: StateFlow<Boolean> = _showNotificationsCenter.asStateFlow()
 
     fun showNotificationsCenter() { _showNotificationsCenter.value = true }
     fun dismissNotificationsCenter() { _showNotificationsCenter.value = false }
-    fun dismissNotificationBanner() { PushNotificationManager.dismissBanner() }
-    fun markNotificationAsRead(id: String) { PushNotificationManager.markAsRead(id) }
-    fun markAllNotificationsAsRead() { PushNotificationManager.markAllAsRead() }
-    fun clearAllNotifications() { PushNotificationManager.clearAll() }
+    fun dismissNotificationBanner() { InAppNotificationManager.dismissBanner() }
+    fun markNotificationAsRead(id: String) { InAppNotificationManager.markAsRead(id) }
+    fun markAllNotificationsAsRead() { InAppNotificationManager.markAllAsRead() }
+    fun clearAllNotifications() { InAppNotificationManager.clearAll() }
 
     fun simulatePushNotification() {
         val sampleSongs = catalog.value
         val sampleSong = sampleSongs.randomOrNull()
-        PushNotificationManager.triggerSimulatedNotification(
+        InAppNotificationManager.triggerSimulatedNotification(
             title = if (sampleSong != null) "🔥 Estreno: ${sampleSong.titulo}" else "🎉 ¡Lanzamiento Exclusivo en Kinemax!",
             message = if (sampleSong != null) "${sampleSong.artista} acaba de lanzar un nuevo tema. ¡Toca para escuchar!" else "Explora la radio inteligente Mix IA recomendada para ti.",
             songId = sampleSong?.id,
@@ -235,8 +226,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
-    fun handleNotificationClick(notif: com.example.data.model.InAppNotification, activity: Activity? = null) {
-        PushNotificationManager.markAsRead(notif.id)
+    fun handleNotificationClick(notif: InAppNotification, activity: Activity? = null) {
+        InAppNotificationManager.markAsRead(notif.id)
         if (notif.songId != null) {
             val song = catalog.value.find { it.id == notif.songId } ?: topSongs.value.find { it.id == notif.songId }
             if (song != null) {
@@ -245,7 +236,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    /** Cola de reproducción (canciones que siguen), ya sincronizada con ExoPlayer. */
     val queue: StateFlow<List<Song>> = audioPlayer.queue
 
     fun showQueue() { _showQueueSheet.value = true }
@@ -255,14 +245,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun playFromQueue(song: Song) = audioPlayer.playFromQueue(song)
 
     init {
-        // Observe crossfade setting
         viewModelScope.launch {
             crossfadeSeconds.collect { sec ->
                 audioPlayer.crossfadeSeconds = sec
             }
         }
 
-        // Observe Equalizer & Audio FX settings and sync with KinemaxEqualizerManager
         viewModelScope.launch {
             volumeNormalizationEnabled.collect { enabled ->
                 com.example.player.KinemaxEqualizerManager.setVolumeNormalization(enabled)
@@ -293,7 +281,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // Observe billing purchase state for errors
         viewModelScope.launch {
             billingManager.purchaseStatus.collect { state ->
                 if (state is BillingManager.PurchaseState.Error) {
@@ -723,4 +710,3 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         billingManager.endConnection()
     }
 }
-
