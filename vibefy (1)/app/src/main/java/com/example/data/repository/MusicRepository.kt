@@ -4,7 +4,9 @@ import android.content.Context
 import com.example.data.local.KinemaxDatabase
 import com.example.data.local.entity.FavoriteSongEntity
 import com.example.data.local.entity.LocalPlaylistEntity
+import com.example.data.model.AlbumDetailApiResponse
 import com.example.data.model.Genre
+import com.example.data.model.HomeAlbum
 import com.example.data.model.Playlist
 import com.example.data.model.RegisterPlaybackRequest
 import com.example.data.model.Song
@@ -70,6 +72,24 @@ class MusicRepository(private val context: Context) {
         return try {
             val res = api.getArtistProfile(artistId)
             if (res.isSuccessful) res.body()?.artista else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    suspend fun getAlbumes(limit: Int = 20): List<HomeAlbum> {
+        return try {
+            val res = api.getAlbumes(limit)
+            if (res.isSuccessful) res.body()?.albumes ?: emptyList() else emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun getAlbumCanciones(albumId: Long): AlbumDetailApiResponse? {
+        return try {
+            val res = api.getAlbumCanciones(albumId)
+            if (res.isSuccessful) res.body() else null
         } catch (e: Exception) {
             null
         }

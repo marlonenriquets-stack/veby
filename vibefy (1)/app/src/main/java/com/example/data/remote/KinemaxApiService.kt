@@ -1,6 +1,8 @@
 package com.example.data.remote
 
 import com.example.data.model.AppConfigResponse
+import com.example.data.model.AlbumDetailApiResponse
+import com.example.data.model.AlbumesResponse
 import com.example.data.model.ArtistResponse
 import com.example.data.model.CatalogoResponse
 import com.example.data.model.ConfirmPurchaseRequest
@@ -52,6 +54,22 @@ interface KinemaxApiService {
     suspend fun getArtistProfile(
         @Query("id") artistId: Long
     ): Response<ArtistResponse>
+
+    /**
+     * Lista de álbumes para la fila de Inicio.
+     */
+    @GET("albumes.php")
+    suspend fun getAlbumes(
+        @Query("limit") limit: Int? = 20
+    ): Response<AlbumesResponse>
+
+    /**
+     * Detalle de un álbum específico con su lista completa de canciones.
+     */
+    @GET("album_canciones.php")
+    suspend fun getAlbumCanciones(
+        @Query("id") albumId: Long
+    ): Response<AlbumDetailApiResponse>
 
     /**
      * Lista de géneros para filtros.

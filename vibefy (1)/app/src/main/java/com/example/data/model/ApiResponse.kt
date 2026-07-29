@@ -89,4 +89,35 @@ data class GenerosResponse(
     @Json(name = "generos") val generos: List<Genre>? = emptyList()
 )
 
+@JsonClass(generateAdapter = true)
+data class AlbumArtistaResumen(
+    @Json(name = "id") val id: Long = 0L,
+    @Json(name = "nombre") val nombre: String = ""
+)
+
+@JsonClass(generateAdapter = true)
+data class HomeAlbum(
+    @Json(name = "id") val id: Long = 0L,
+    @Json(name = "nombre") val nombre: String = "",
+    @Json(name = "portada_url") val portadaUrl: String? = null,
+    @Json(name = "num_canciones") val numCanciones: Int = 0,
+    @Json(name = "artista") val artista: AlbumArtistaResumen? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class AlbumesResponse(
+    @Json(name = "ok") val ok: Boolean = false,
+    @Json(name = "albumes") val albumes: List<HomeAlbum>? = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class AlbumDetailApiResponse(
+    @Json(name = "ok") val ok: Boolean = false,
+    @Json(name = "nombre") val nombre: String = "",
+    @Json(name = "artista_nombre") val artistaNombre: String? = null,
+    @Json(name = "portada_url") val portadaUrl: String? = null,
+    @Json(name = "num_canciones") val numCanciones: Int = 0,
+    @Json(name = "canciones") val canciones: List<Song>? = emptyList()
+)
+
 

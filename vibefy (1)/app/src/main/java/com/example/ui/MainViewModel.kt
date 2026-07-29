@@ -11,7 +11,9 @@ import com.example.billing.BillingManager
 import com.example.data.local.AudioSettingsDataStore
 import com.example.data.local.UserSessionManager
 import com.example.data.model.FullArtistProfile
+import com.example.data.model.AlbumDetailApiResponse
 import com.example.data.model.Genre
+import com.example.data.model.HomeAlbum
 import com.example.data.model.Playlist
 import com.example.data.model.Song
 import com.example.data.model.SubscriptionPlan
@@ -86,6 +88,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _generos = MutableStateFlow<List<Genre>>(emptyList())
     val generos: StateFlow<List<Genre>> = _generos.asStateFlow()
 
+    private val _albumes = MutableStateFlow<List<HomeAlbum>>(emptyList())
+    val albumes: StateFlow<List<HomeAlbum>> = _albumes.asStateFlow()
+
+    private val _selectedAlbumDetail = MutableStateFlow<AlbumDetailApiResponse?>(null)
+    val selectedAlbumDetail: StateFlow<AlbumDetailApiResponse?> = _selectedAlbumDetail.asStateFlow()
+
+    private val _isLoadingAlbumDetail = MutableStateFlow(false)
+    val isLoadingAlbumDetail: StateFlow<Boolean> = _isLoadingAlbumDetail.asStateFlow()
+
+    fun openAlbumFromHome(albumId: Long) {
+        viewModelScope.launch {
+            _isLoadingAlbumDetail.value = true
+            _selectedAlbumDetail.value = repository.getAlbumCanciones(albumId)
+            _isLoadingAlbumDetail.value = false
+        }
+    }
+
+    fun clearSelectedAlbumDetail() {
+        _selectedAlbumDetail.value = null
+    }
+
     private val _selectedGenreId = MutableStateFlow<Long?>(null)
     val selectedGenreId: StateFlow<Long?> = _selectedGenreId.asStateFlow()
 
@@ -109,6 +132,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = "Plano"
+    )
+
+    val audioQuality: StateFlow<String> = AudioSettingsDataStore.getAudioQuality(application).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = "Alta (320 kbps)"
+    )
+
+    val volumeNormalizationEnabled: StateFlow<Boolean> = AudioSettingsDataStore.getVolumeNormalization(application).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = true
+    )
+
+    val volumeLevel: StateFlow<String> = AudioSettingsDataStore.getVolumeLevel(application).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = "Medio"
+    )
+
+    val bassBoostStrength: StateFlow<Int> = AudioSettingsDataStore.getBassBoost(application).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
+    )
+
+    val virtualizerStrength: StateFlow<Int> = AudioSettingsDataStore.getVirtualizer(application).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = 0
     )
 
     // Library state
@@ -151,6 +204,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _showQueueSheet = MutableStateFlow(false)
     val showQueueSheet: StateFlow<Boolean> = _showQueueSheet.asStateFlow()
 
+    // OneSignal Push & In-App Notifications State
+    val inAppNotifications = PushNotificationManager.notifications
+    val currentNotificationBanner = PushNotificationManager.currentBanner
+    val unreadNotificationCount = PushNotificationManager.unreadCount
+
+    private val _showNotificationsCenter = MutableStateFlow(false)
+    val showNotificationsCenter: StateFlow<Boolean> = _showNotificationsCenter.asStateFlow()
+
+    fun showNotificationsCenter() { _showNotificationsCenter.value = true }
+    fun dismissNotificationsCenter() { _showNotificationsCenter.value = false }
+    fun dismissNotificationBanner() { PushNotificationManager.dismissBanner() }
+    fun markNotificationAsRead(id: String) { PushNotificationManager.markAsRead(id) }
+    fun markAllNotificationsAsRead() { PushNotificationManager.markAllAsRead() }
+    fun clearAllNotifications() { PushNotificationManager.clearAll() }
+
+    fun simulatePushNotification() {
+        val sampleSongs = catalog.value
+        val sampleSong = sampleSongs.randomOrNull()
+        PushNotificationManager.triggerSimulatedNotification(
+            title = if (sampleSong != null) "🔥 Estreno: ${sampleSong.titulo}" else "🎉 ¡Lanzamiento Exclusivo en Kinemax!",
+            message = if (sampleSong != null) "${sampleSong.artista} acaba de lanzar un nuevo tema. ¡Toca para escuchar!" else "Explora la radio inteligente Mix IA recomendada para ti.",
+            songId = sampleSong?.id,
+            type = if (sampleSong != null) "music" else "promo"
+        )
+    }
+
+    fun handleNotificationClick(notif: com.example.data.model.InAppNotification, activity: Activity? = null) {
+        PushNotificationManager.markAsRead(notif.id)
+        if (notif.songId != null) {
+            val song = catalog.value.find { it.id == notif.songId } ?: topSongs.value.find { it.id == notif.songId }
+            if (song != null) {
+                playSong(song, catalog.value, activity)
+            }
+        }
+    }
+
     /** Cola de reproducción (canciones que siguen), ya sincronizada con ExoPlayer. */
     val queue: StateFlow<List<Song>> = audioPlayer.queue
 
@@ -165,6 +254,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             crossfadeSeconds.collect { sec ->
                 audioPlayer.crossfadeSeconds = sec
+            }
+        }
+
+        // Observe Equalizer & Audio FX settings and sync with KinemaxEqualizerManager
+        viewModelScope.launch {
+            volumeNormalizationEnabled.collect { enabled ->
+                com.example.player.KinemaxEqualizerManager.setVolumeNormalization(enabled)
+            }
+        }
+
+        viewModelScope.launch {
+            volumeLevel.collect { level ->
+                com.example.player.KinemaxEqualizerManager.setVolumeLevel(level)
+            }
+        }
+
+        viewModelScope.launch {
+            bassBoostStrength.collect { strength ->
+                com.example.player.KinemaxEqualizerManager.setBassBoost(strength)
+            }
+        }
+
+        viewModelScope.launch {
+            virtualizerStrength.collect { strength ->
+                com.example.player.KinemaxEqualizerManager.setVirtualizer(strength)
+            }
+        }
+
+        viewModelScope.launch {
+            eqPreset.collect { preset ->
+                com.example.player.KinemaxEqualizerManager.applyPreset(preset)
             }
         }
 
@@ -190,6 +310,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setEqPreset(preset: String) {
         viewModelScope.launch {
             AudioSettingsDataStore.saveEqPreset(getApplication(), preset)
+        }
+    }
+
+    fun setAudioQuality(quality: String) {
+        viewModelScope.launch {
+            AudioSettingsDataStore.saveAudioQuality(getApplication(), quality)
+        }
+    }
+
+    fun setVolumeNormalization(enabled: Boolean) {
+        viewModelScope.launch {
+            AudioSettingsDataStore.saveVolumeNormalization(getApplication(), enabled)
+        }
+    }
+
+    fun setVolumeLevel(level: String) {
+        viewModelScope.launch {
+            AudioSettingsDataStore.saveVolumeLevel(getApplication(), level)
+        }
+    }
+
+    fun setBassBoostStrength(strength: Int) {
+        viewModelScope.launch {
+            AudioSettingsDataStore.saveBassBoost(getApplication(), strength)
+        }
+    }
+
+    fun setVirtualizerStrength(strength: Int) {
+        viewModelScope.launch {
+            AudioSettingsDataStore.saveVirtualizer(getApplication(), strength)
         }
     }
 
@@ -244,6 +394,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val plans = repository.getPlanes()
                 val pls = repository.getPlaylistsRemote()
                 val gens = repository.getGeneros()
+                val albs = repository.getAlbumes(limit = 20)
                 repository.getFavoritosRemote()
                 
                 _topSongs.value = tops
@@ -251,6 +402,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _subscriptionPlans.value = plans
                 _remotePlaylists.value = pls
                 _generos.value = gens
+                _albumes.value = albs
                 _dataInfoMessage.value = "Se cargaron ${cat.size} canciones, ${gens.size} géneros, ${tops.size} más escuchadas, ${plans.size} planes"
             } catch (e: Exception) {
                 _errorMessage.value = "Error al cargar datos API: ${e.localizedMessage ?: e.message}"
@@ -485,6 +637,79 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             PushNotificationManager.logoutUser()
             _authUiState.value = AuthUiState.Idle
         }
+    }
+
+    // AI Chat state
+    data class ChatMessageItem(
+        val id: String = java.util.UUID.randomUUID().toString(),
+        val sender: String, // "user" or "ai"
+        val text: String,
+        val recommendedSongs: List<Song> = emptyList(),
+        val timestamp: String = ""
+    )
+
+    private val _chatMessages = MutableStateFlow<List<ChatMessageItem>>(
+        listOf(
+            ChatMessageItem(
+                sender = "ai",
+                text = "¡Hola! Soy tu Asistente Musical de Vibefy. Puedes hablar conmigo o pedirme recomendaciones de canciones para cualquier momento, actividad o estado de ánimo. ¿Qué te gustaría escuchar hoy?"
+            )
+        )
+    )
+    val chatMessages: StateFlow<List<ChatMessageItem>> = _chatMessages.asStateFlow()
+
+    private val _isAiChatLoading = MutableStateFlow(false)
+    val isAiChatLoading: StateFlow<Boolean> = _isAiChatLoading.asStateFlow()
+
+    val djStyle = audioPlayer.djStyle
+
+    fun setDjStyle(style: String) {
+        audioPlayer.setDjStyle(style)
+    }
+
+    fun sendChatMessage(userText: String) {
+        if (userText.isBlank()) return
+        val userMsg = ChatMessageItem(sender = "user", text = userText)
+        _chatMessages.value = _chatMessages.value + userMsg
+        _isAiChatLoading.value = true
+
+        viewModelScope.launch {
+            val history = _chatMessages.value.map { it.sender to it.text }
+            val current = audioPlayer.currentSong.value
+            val candidates = catalog.value
+
+            val res = GeminiAiService.chatWithAi(
+                userQuery = userText,
+                conversationHistory = history,
+                candidateCatalog = candidates,
+                currentSong = current
+            )
+
+            _isAiChatLoading.value = false
+            res.onSuccess { chatResponse ->
+                val aiMsg = ChatMessageItem(
+                    sender = "ai",
+                    text = chatResponse.message,
+                    recommendedSongs = chatResponse.recommendedSongs
+                )
+                _chatMessages.value = _chatMessages.value + aiMsg
+            }.onFailure { err ->
+                val errorMsg = ChatMessageItem(
+                    sender = "ai",
+                    text = "Disculpa, ocurrió un inconveniente conectando con el servicio de Inteligencia Artificial. Inténtalo de nuevo."
+                )
+                _chatMessages.value = _chatMessages.value + errorMsg
+            }
+        }
+    }
+
+    fun clearChatHistory() {
+        _chatMessages.value = listOf(
+            ChatMessageItem(
+                sender = "ai",
+                text = "¡Hola! Soy tu Asistente Musical de Vibefy. ¿Qué tipo de música o canciones te gustaría descubrir hoy?"
+            )
+        )
     }
 
     override fun onCleared() {

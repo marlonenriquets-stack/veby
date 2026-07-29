@@ -57,7 +57,10 @@ import androidx.compose.ui.unit.sp
 import com.example.data.model.Song
 import com.example.service.RemoteConfigManager
 import com.example.ui.MainViewModel
+import androidx.compose.ui.zIndex
 import com.example.ui.components.FullPlayerBottomSheet
+import com.example.ui.components.InAppNotificationBanner
+import com.example.ui.components.NotificationsCenterBottomSheet
 import com.example.ui.components.MiniPlayerBar
 import com.example.ui.components.PremiumDialog
 import com.example.ui.components.QueueBottomSheet
@@ -111,9 +114,34 @@ fun KinemaxNavGraph(
     // Main App Navigation State
     var currentDestination by remember { mutableStateOf<NavDestination>(NavDestination.Home) }
     var showAudioSettings by remember { mutableStateOf(false) }
+    var showAiChatSheet by remember { mutableStateOf(false) }
     var selectedSongForPlaylistDialog by remember { mutableStateOf<Song?>(null) }
     var selectedArtistId by remember { mutableStateOf<Long?>(null) }
     var selectedAlbum by remember { mutableStateOf<ArtistAlbum?>(null) }
+    var selectedAlbumArtistName by remember { mutableStateOf("") }
+
+    val albumes by viewModel.albumes.collectAsState()
+    val selectedAlbumDetail by viewModel.selectedAlbumDetail.collectAsState()
+
+    // Cuando se abre un álbum desde Inicio, lo convertimos al mismo modelo
+    // (ArtistAlbum) que ya usa AlbumDetailScreen para los álbumes de un artista,
+    // así reusamos la misma pantalla sin duplicar UI.
+    androidx.compose.runtime.LaunchedEffect(selectedAlbumDetail) {
+        selectedAlbumDetail?.let { detalle ->
+            selectedAlbum = ArtistAlbum(
+                nombre = detalle.nombre,
+                portadaUrl = detalle.portadaUrl,
+                numCanciones = detalle.numCanciones,
+                canciones = detalle.canciones
+            )
+            selectedAlbumArtistName = detalle.artistaNombre ?: ""
+            viewModel.clearSelectedAlbumDetail()
+        }
+    }
+
+    val chatMessages by viewModel.chatMessages.collectAsState()
+    val isAiChatLoading by viewModel.isAiChatLoading.collectAsState()
+    val djStyle by viewModel.djStyle.collectAsState()
 
     val selectedArtistProfile by viewModel.selectedArtistProfile.collectAsState()
     val isLoadingArtistProfile by viewModel.isLoadingArtistProfile.collectAsState()
@@ -151,12 +179,25 @@ fun KinemaxNavGraph(
     val repeatMode by viewModel.audioPlayer.repeatMode.collectAsState()
     val isDjModeActive by viewModel.audioPlayer.isDjModeActive.collectAsState()
     val isSpeakingDj by viewModel.audioPlayer.isSpeakingDj.collectAsState()
+    val crossfadeTransition by viewModel.audioPlayer.crossfadeTransition.collectAsState()
+    val crossfadeProgress by viewModel.audioPlayer.crossfadeProgress.collectAsState()
 
     val crossfadeSeconds by viewModel.crossfadeSeconds.collectAsState()
     val eqPreset by viewModel.eqPreset.collectAsState()
+    val audioQuality by viewModel.audioQuality.collectAsState()
+    val volumeNormalizationEnabled by viewModel.volumeNormalizationEnabled.collectAsState()
+    val volumeLevel by viewModel.volumeLevel.collectAsState()
+    val bassBoostStrength by viewModel.bassBoostStrength.collectAsState()
+    val virtualizerStrength by viewModel.virtualizerStrength.collectAsState()
 
     val isPlayerExpanded by viewModel.isPlayerExpanded.collectAsState()
     val showPremiumDialog by viewModel.showPremiumDialog.collectAsState()
+
+    // Notification State
+    val inAppNotifications by viewModel.inAppNotifications.collectAsState()
+    val currentNotificationBanner by viewModel.currentNotificationBanner.collectAsState()
+    val unreadNotificationCount by viewModel.unreadNotificationCount.collectAsState()
+    val showNotificationsCenter by viewModel.showNotificationsCenter.collectAsState()
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -179,6 +220,8 @@ fun KinemaxNavGraph(
                             isPlaying = isPlaying,
                             progressMs = progressMs,
                             durationMs = durationMs,
+                            crossfadeTransition = crossfadeTransition,
+                            crossfadeProgress = crossfadeProgress,
                             onPlayPauseClick = { viewModel.audioPlayer.togglePlayPause() },
                             onNextClick = { viewModel.audioPlayer.next() },
                             onBarClick = { viewModel.setPlayerExpanded(true) }
@@ -238,14 +281,15 @@ fun KinemaxNavGraph(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+
             if (selectedAlbum != null) {
                 AlbumDetailScreen(
                     album = selectedAlbum!!,
-                    artistName = selectedArtistProfile?.nombre ?: "Artista",
+                    artistName = selectedArtistProfile?.nombre ?: selectedAlbumArtistName.ifBlank { "Artista" },
                     currentPlayingSong = currentPlayingSong,
                     isPlaying = isPlaying,
                     permiteDescargas = currentUser?.permiteDescargas ?: false,
-                    onBackClick = { selectedAlbum = null },
+                    onBackClick = { selectedAlbum = null; selectedAlbumArtistName = "" },
                     onSongClick = { song, playlist -> viewModel.playSong(song, playlist, activity) },
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
                     onDownloadClick = { viewModel.downloadSong(it) },
@@ -274,8 +318,20 @@ fun KinemaxNavGraph(
                 com.example.ui.screens.settings.AudioSettingsScreen(
                     crossfadeSeconds = crossfadeSeconds,
                     selectedPreset = eqPreset,
+                    audioQuality = audioQuality,
+                    volumeNormalizationEnabled = volumeNormalizationEnabled,
+                    volumeLevel = volumeLevel,
+                    bassBoostStrength = bassBoostStrength,
+                    virtualizerStrength = virtualizerStrength,
+                    djStyle = djStyle,
                     onCrossfadeChanged = { viewModel.setCrossfade(it) },
                     onPresetSelected = { viewModel.setEqPreset(it) },
+                    onAudioQualitySelected = { viewModel.setAudioQuality(it) },
+                    onVolumeNormalizationChanged = { viewModel.setVolumeNormalization(it) },
+                    onVolumeLevelSelected = { viewModel.setVolumeLevel(it) },
+                    onBassBoostChanged = { viewModel.setBassBoostStrength(it) },
+                    onVirtualizerChanged = { viewModel.setVirtualizerStrength(it) },
+                    onDjStyleSelected = { viewModel.setDjStyle(it) },
                     onBackClick = { showAudioSettings = false }
                 )
             } else {
@@ -293,8 +349,11 @@ fun KinemaxNavGraph(
                         onFavoriteClick = { viewModel.toggleFavorite(it) },
                         onDownloadClick = { viewModel.downloadSong(it) },
                         onAddToPlaylistClick = { selectedSongForPlaylistDialog = it },
-                    onAddToQueueClick = { viewModel.addToQueue(it) },
-                        onArtistClick = onArtistClick
+                        onAddToQueueClick = { viewModel.addToQueue(it) },
+                        onArtistClick = onArtistClick,
+                        albumes = albumes,
+                        onAlbumClick = { viewModel.openAlbumFromHome(it) },
+                        onOpenAiChatClick = { showAiChatSheet = true }
                     )
                     NavDestination.Search -> SearchScreen(
                         catalog = catalog,
@@ -349,6 +408,8 @@ fun KinemaxNavGraph(
         repeatMode = repeatMode,
         isDjModeActive = isDjModeActive,
         isSpeakingDj = isSpeakingDj,
+        crossfadeTransition = crossfadeTransition,
+        crossfadeProgress = crossfadeProgress,
         permiteDescargas = currentUser?.permiteDescargas ?: false,
         onDismiss = { viewModel.setPlayerExpanded(false) },
         onPlayPauseClick = { viewModel.audioPlayer.togglePlayPause() },
@@ -361,8 +422,21 @@ fun KinemaxNavGraph(
         onDownloadClick = { viewModel.downloadSong(it) },
         onToggleDjMode = { viewModel.audioPlayer.toggleDjMode() },
         onRecommendationsClick = { viewModel.generateSmartRecommendations(activity) },
+        onOpenAiChat = { showAiChatSheet = true },
         onArtistClick = onArtistClick,
         onQueueClick = { viewModel.showQueue() }
+    )
+
+    // Interactive AI Chat Assistant Sheet
+    com.example.ui.components.AiChatBottomSheet(
+        isVisible = showAiChatSheet,
+        messages = chatMessages,
+        isLoading = isAiChatLoading,
+        onDismiss = { showAiChatSheet = false },
+        onSendMessage = { viewModel.sendChatMessage(it) },
+        onClearChat = { viewModel.clearChatHistory() },
+        onPlaySong = { song -> viewModel.playSong(song, catalog, activity) },
+        onAddToQueue = { song -> viewModel.addToQueue(song) }
     )
 
     // Cola de reproducción

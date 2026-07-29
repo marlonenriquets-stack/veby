@@ -33,15 +33,9 @@ class KinemaxApplication : Application() {
             Log.e("KinemaxApplication", "Failed to initialize AdMob", e)
         }
 
-        // Initialize OneSignal Push Notifications SDK
-        // OneSignal App ID can be updated dynamically or via backend config
-        val defaultOneSignalAppId = "YOUR-ONESIGNAL-APP-ID"
+        // Initialize OneSignal Push Notifications & In-App Notifications
         try {
-            OneSignal.initWithContext(this, defaultOneSignalAppId)
-            CoroutineScope(Dispatchers.IO).launch {
-                OneSignal.Notifications.requestPermission(true)
-            }
-            Log.d("KinemaxApplication", "OneSignal initialized")
+            com.example.service.PushNotificationManager.init(this)
         } catch (e: Exception) {
             Log.e("KinemaxApplication", "Failed to initialize OneSignal", e)
         }

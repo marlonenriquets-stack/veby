@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,12 +26,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material3.Surface
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Shuffle
@@ -73,6 +79,21 @@ import com.example.ui.theme.KinemaxRed
 import com.example.ui.theme.KinemaxSurface
 import com.example.ui.theme.KinemaxTextSecondary
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FullPlayerBottomSheet(
@@ -85,6 +106,8 @@ fun FullPlayerBottomSheet(
     repeatMode: RepeatMode,
     isDjModeActive: Boolean = false,
     isSpeakingDj: Boolean = false,
+    crossfadeTransition: com.example.player.CrossfadeTransitionInfo? = null,
+    crossfadeProgress: Float = 1f,
     permiteDescargas: Boolean,
     onDismiss: () -> Unit,
     onPlayPauseClick: () -> Unit,
@@ -98,6 +121,7 @@ fun FullPlayerBottomSheet(
     onToggleDjMode: () -> Unit = {},
     onExplainSongClick: () -> Unit = {},
     onRecommendationsClick: () -> Unit = {},
+    onOpenAiChat: () -> Unit = {},
     onArtistClick: ((Long) -> Unit)? = null,
     onQueueClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -114,6 +138,11 @@ fun FullPlayerBottomSheet(
 
         var isUserSeeking by remember { mutableStateOf(false) }
         var sliderPosition by remember { mutableFloatStateOf(0f) }
+
+        androidx.compose.runtime.LaunchedEffect(song.id) {
+            isUserSeeking = false
+            sliderPosition = 0f
+        }
 
         val currentProgressMs = if (isUserSeeking) sliderPosition.toLong() else progressMs
         val formattedElapsed = formatMs(currentProgressMs)
@@ -191,22 +220,23 @@ fun FullPlayerBottomSheet(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 16.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     AssistChip(
-                        onClick = { showExplainSheet = true },
-                        label = { Text("Explicar Canción", fontSize = 11.sp) },
+                        onClick = onOpenAiChat,
+                        label = { Text("Hablar con IA", fontSize = 11.sp) },
                         leadingIcon = {
                             Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = KinemaxAccent, modifier = Modifier.size(16.dp))
                         },
-                        colors = AssistChipDefaults.assistChipColors(containerColor = KinemaxSurface)
+                        colors = AssistChipDefaults.assistChipColors(containerColor = KinemaxAccent.copy(alpha = 0.15f)),
+                        modifier = Modifier.weight(1f)
                     )
 
                     AssistChip(
                         onClick = onToggleDjMode,
                         label = {
                             Text(
-                                if (isSpeakingDj) "DJ Hablando..." else if (isDjModeActive) "Modo DJ: ON" else "Modo DJ IA",
+                                if (isSpeakingDj) "DJ..." else if (isDjModeActive) "Modo DJ: ON" else "Modo DJ IA",
                                 fontSize = 11.sp
                             )
                         },
@@ -215,39 +245,84 @@ fun FullPlayerBottomSheet(
                         },
                         colors = AssistChipDefaults.assistChipColors(
                             containerColor = if (isDjModeActive) KinemaxAccent.copy(alpha = 0.2f) else KinemaxSurface
-                        )
+                        ),
+                        modifier = Modifier.weight(1f)
                     )
 
                     AssistChip(
                         onClick = onRecommendationsClick,
                         label = { Text("Mix IA", fontSize = 11.sp) },
                         leadingIcon = {
-                            Icon(Icons.Default.QueueMusic, contentDescription = null, tint = KinemaxAccent, modifier = Modifier.size(16.dp))
+                            Icon(Icons.AutoMirrored.Filled.QueueMusic, contentDescription = null, tint = KinemaxAccent, modifier = Modifier.size(16.dp))
                         },
-                        colors = AssistChipDefaults.assistChipColors(containerColor = KinemaxSurface)
+                        colors = AssistChipDefaults.assistChipColors(containerColor = KinemaxSurface),
+                        modifier = Modifier.weight(1f)
                     )
                 }
 
-                // Artwork
+                // Artwork with smooth crossfade animation
+                val fromSong = crossfadeTransition?.fromSong
+                val isTransitioning = crossfadeTransition != null && fromSong != null && fromSong.id != song.id && crossfadeProgress < 1f
+
+                val artworkBorderModifier = if (isTransitioning) {
+                    Modifier.border(
+                        width = 2.5.dp,
+                        brush = Brush.horizontalGradient(
+                            listOf(KinemaxAccent, Color(0xFFFF4081), Color(0xFF00E5FF), KinemaxAccent)
+                        ),
+                        shape = RoundedCornerShape(24.dp)
+                    )
+                } else Modifier
+
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
                         .clip(RoundedCornerShape(24.dp))
+                        .then(artworkBorderModifier)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = song.portadaUrl,
-                        contentDescription = "Portada de ${song.titulo}",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
+                    if (isTransitioning && fromSong != null) {
+                        // Outgoing cover image fading out and scaling slightly
+                        AsyncImage(
+                            model = fromSong.portadaUrl,
+                            contentDescription = "Portada de ${fromSong.titulo}",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    alpha = (1f - crossfadeProgress).coerceIn(0f, 1f)
+                                    scaleX = 1f + (crossfadeProgress * 0.08f)
+                                    scaleY = 1f + (crossfadeProgress * 0.08f)
+                                },
+                            contentScale = ContentScale.Crop
+                        )
+                        // Incoming cover image fading in and scaling into place
+                        AsyncImage(
+                            model = song.portadaUrl,
+                            contentDescription = "Portada de ${song.titulo}",
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .graphicsLayer {
+                                    alpha = crossfadeProgress.coerceIn(0f, 1f)
+                                    scaleX = 0.92f + (crossfadeProgress * 0.08f)
+                                    scaleY = 0.92f + (crossfadeProgress * 0.08f)
+                                },
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        AsyncImage(
+                            model = song.portadaUrl,
+                            contentDescription = "Portada de ${song.titulo}",
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Song Info Row (Title, Artist, Favorite)
+                // Song Info Row (Title, Artist, Favorite) with smooth crossfade
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically
@@ -255,23 +330,35 @@ fun FullPlayerBottomSheet(
                     Column(
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text(
-                            text = song.titulo,
-                            style = MaterialTheme.typography.headlineMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 22.sp
-                            ),
-                            color = MaterialTheme.colorScheme.onBackground,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        ArtistCreditsText(
-                            song = song,
-                            style = MaterialTheme.typography.titleMedium,
-                            onArtistClick = onArtistClick?.let { callback ->
-                                { id -> onDismiss(); callback(id) }
+                        AnimatedContent(
+                            targetState = song,
+                            transitionSpec = {
+                                val durationMs = ((crossfadeTransition?.durationSeconds ?: 3) * 1000).coerceAtLeast(300)
+                                fadeIn(animationSpec = tween(durationMillis = durationMs)) togetherWith
+                                        fadeOut(animationSpec = tween(durationMillis = durationMs))
+                            },
+                            label = "song_info_crossfade"
+                        ) { currentSong ->
+                            Column {
+                                Text(
+                                    text = currentSong.titulo,
+                                    style = MaterialTheme.typography.headlineMedium.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 22.sp
+                                    ),
+                                    color = MaterialTheme.colorScheme.onBackground,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                ArtistCreditsText(
+                                    song = currentSong,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    onArtistClick = onArtistClick?.let { callback ->
+                                        { id -> onDismiss(); callback(id) }
+                                    }
+                                )
                             }
-                        )
+                        }
                     }
 
                     IconButton(
@@ -289,10 +376,23 @@ fun FullPlayerBottomSheet(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Progress Slider & Timers
+                // Progress Slider & Timers with smooth transition animation
+                val targetSliderVal = if (isUserSeeking) sliderPosition else progressMs.toFloat()
+                val animatedSliderVal by animateFloatAsState(
+                    targetValue = targetSliderVal,
+                    animationSpec = tween(durationMillis = if (isTransitioning) 350 else 150, easing = LinearEasing),
+                    label = "full_player_slider_anim"
+                )
+
+                val activeTrackColor by animateColorAsState(
+                    targetValue = if (isTransitioning) Color(0xFFFF4081) else KinemaxAccent,
+                    animationSpec = tween(500),
+                    label = "slider_active_color"
+                )
+
                 Column(modifier = Modifier.fillMaxWidth()) {
                     Slider(
-                        value = if (isUserSeeking) sliderPosition else progressMs.toFloat(),
+                        value = if (isUserSeeking) sliderPosition else animatedSliderVal.coerceIn(0f, durationMs.toFloat().coerceAtLeast(1f)),
                         onValueChange = {
                             isUserSeeking = true
                             sliderPosition = it
@@ -303,8 +403,8 @@ fun FullPlayerBottomSheet(
                         },
                         valueRange = 0f..durationMs.toFloat().coerceAtLeast(1f),
                         colors = SliderDefaults.colors(
-                            thumbColor = KinemaxAccent,
-                            activeTrackColor = KinemaxAccent,
+                            thumbColor = activeTrackColor,
+                            activeTrackColor = activeTrackColor,
                             inactiveTrackColor = KinemaxTextSecondary.copy(alpha = 0.3f)
                         ),
                         modifier = Modifier.testTag("full_player_slider")
@@ -400,7 +500,7 @@ fun FullPlayerBottomSheet(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(
-                            imageVector = Icons.Default.QueueMusic,
+                            imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                             contentDescription = "Cola de reproducción",
                             tint = KinemaxTextSecondary,
                             modifier = Modifier.size(18.dp)

@@ -45,7 +45,23 @@ class DjSpeaker(private val context: Context) {
         }
     }
 
-    fun speak(text: String, onSpeechFinished: () -> Unit) {
+    fun setDjStyle(styleName: String) {
+        val (pitch, rate) = when (styleName.lowercase()) {
+            "dj de club & mezclas", "club" -> 1.12f to 1.20f
+            "locutor clásico & seductor", "clasico" -> 0.90f to 0.95f
+            "chill & acoustic", "chill" -> 0.98f to 1.00f
+            else -> 1.05f to 1.10f // Radio FM Enérgico (Default)
+        }
+        try {
+            tts?.setPitch(pitch)
+            tts?.setSpeechRate(rate)
+        } catch (e: Exception) {
+            Log.e("DjSpeaker", "Error setting pitch/rate", e)
+        }
+    }
+
+    fun speak(text: String, djStyle: String = "Radio FM Enérgico", onSpeechFinished: () -> Unit) {
+        setDjStyle(djStyle)
         val hasFinished = AtomicBoolean(false)
 
         fun notifyFinished() {

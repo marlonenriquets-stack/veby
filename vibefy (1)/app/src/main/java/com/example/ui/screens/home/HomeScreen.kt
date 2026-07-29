@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
@@ -48,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.example.data.model.HomeAlbum
 import com.example.data.model.Song
 import com.example.data.model.User
 import com.example.ui.components.SongListItem
@@ -59,6 +61,11 @@ import com.example.ui.theme.KinemaxSurface
 import com.example.ui.theme.KinemaxSurfaceVariant
 import com.example.ui.theme.KinemaxTextSecondary
 
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.IconButton
+
 @Composable
 fun HomeScreen(
     user: User?,
@@ -68,6 +75,7 @@ fun HomeScreen(
     isPlaying: Boolean,
     selectedPeriod: String,
     dataInfoMessage: String? = null,
+    unreadNotificationCount: Int = 0,
     onPeriodSelected: (String) -> Unit,
     onSongClick: (Song, List<Song>) -> Unit,
     onFavoriteClick: (Song) -> Unit,
@@ -75,6 +83,10 @@ fun HomeScreen(
     onAddToPlaylistClick: ((Song) -> Unit)? = null,
     onAddToQueueClick: ((Song) -> Unit)? = null,
     onArtistClick: ((Long) -> Unit)? = null,
+    albumes: List<HomeAlbum> = emptyList(),
+    onAlbumClick: ((Long) -> Unit)? = null,
+    onOpenAiChatClick: () -> Unit = {},
+    onNotificationsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val periods = listOf(
@@ -129,26 +141,130 @@ fun HomeScreen(
                     )
                 }
 
-                // Subscription Badge
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(if (user?.esPremium == true) KinemaxGold.copy(alpha = 0.2f) else KinemaxSurfaceVariant)
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = if (user?.esPremium == true) Icons.Default.Star else Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = if (user?.esPremium == true) KinemaxGold else KinemaxTextSecondary,
-                            modifier = Modifier.size(16.dp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onNotificationsClick,
+                        modifier = Modifier.testTag("notification_bell_button")
+                    ) {
+                        BadgedBox(
+                            badge = {
+                                if (unreadNotificationCount > 0) {
+                                    Badge(
+                                        containerColor = KinemaxAccent,
+                                        contentColor = Color.Black
+                                    ) {
+                                        Text(
+                                            text = "$unreadNotificationCount",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp
+                                        )
+                                    }
+                                }
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Notificaciones In-App",
+                                tint = Color.White
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    // Subscription Badge
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (user?.esPremium == true) KinemaxGold.copy(alpha = 0.2f) else KinemaxSurfaceVariant)
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (user?.esPremium == true) Icons.Default.Star else Icons.Default.Lock,
+                                contentDescription = null,
+                                tint = if (user?.esPremium == true) KinemaxGold else KinemaxTextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (user?.esPremium == true) "PREMIUM" else "FREE",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = if (user?.esPremium == true) KinemaxGold else KinemaxTextSecondary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Interactive AI Assistant Banner
+        item {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 6.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(
+                        Brush.horizontalGradient(
+                            colors = listOf(
+                                KinemaxAccent.copy(alpha = 0.25f),
+                                KinemaxSurface
+                            )
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                    )
+                    .clickable { onOpenAiChatClick() }
+                    .padding(14.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(KinemaxAccent),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "IA",
+                                tint = Color.Black,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                text = "Habla con el Asistente IA",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+                            Text(
+                                text = "Pídele recomendaciones por voz o chat",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = KinemaxTextSecondary
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(KinemaxAccent)
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                    ) {
                         Text(
-                            text = if (user?.esPremium == true) "PREMIUM" else "FREE",
+                            text = "Hablar",
                             style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (user?.esPremium == true) KinemaxGold else KinemaxTextSecondary
+                            color = Color.Black
                         )
                     }
                 }
@@ -345,6 +461,74 @@ fun HomeScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section: Álbumes
+        if (albumes.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Álbumes",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 8.dp)
+                )
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    items(albumes, key = { it.id }) { album ->
+                        Column(
+                            modifier = Modifier
+                                .width(140.dp)
+                                .clickable { onAlbumClick?.invoke(album.id) }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(140.dp)
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (!album.portadaUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = album.portadaUrl,
+                                        contentDescription = album.nombre,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.size(140.dp)
+                                    )
+                                } else {
+                                    Box(
+                                        modifier = Modifier.size(140.dp).background(KinemaxSurface),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = album.nombre.take(1).uppercase(),
+                                            style = MaterialTheme.typography.headlineMedium,
+                                            color = KinemaxTextSecondary
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = album.nombre,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            if (album.artista != null) {
+                                Text(
+                                    text = album.artista.nombre,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = KinemaxTextSecondary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }

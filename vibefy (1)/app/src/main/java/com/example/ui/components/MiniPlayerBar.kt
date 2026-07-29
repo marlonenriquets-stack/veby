@@ -21,6 +21,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,6 +38,16 @@ import com.example.ui.theme.KinemaxAccent
 import com.example.ui.theme.KinemaxSurfaceVariant
 import com.example.ui.theme.KinemaxTextSecondary
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
+import com.example.player.CrossfadeTransitionInfo
+import com.example.ui.theme.KinemaxSurface
+
 /**
  * Mini-reproductor estilo Spotify: barra sólida y plana a todo el ancho
  * (no una tarjeta flotante con degradado), con una línea de progreso
@@ -48,12 +59,22 @@ fun MiniPlayerBar(
     isPlaying: Boolean,
     progressMs: Long,
     durationMs: Long,
+    crossfadeTransition: CrossfadeTransitionInfo? = null,
+    crossfadeProgress: Float = 1f,
     onPlayPauseClick: () -> Unit,
     onNextClick: () -> Unit,
     onBarClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val progressFraction = if (durationMs > 0) (progressMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+    val fromSong = crossfadeTransition?.fromSong
+    val isTransitioning = crossfadeTransition != null && fromSong != null && fromSong.id != song.id && crossfadeProgress < 1f
+
+    val targetFraction = if (durationMs > 0) (progressMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+    val animatedProgressFraction by animateFloatAsState(
+        targetValue = targetFraction,
+        animationSpec = tween(durationMillis = if (isTransitioning) 400 else 200, easing = LinearEasing),
+        label = "mini_progress_anim"
+    )
 
     Column(
         modifier = modifier
@@ -62,18 +83,30 @@ fun MiniPlayerBar(
             .clickable { onBarClick() }
             .testTag("mini_player_bar")
     ) {
-        // Línea de progreso pegada arriba, a todo el ancho — como en Spotify
+        // Línea de progreso animada pegada arriba
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(2.dp)
+                .height(2.5.dp)
                 .background(Color.White.copy(alpha = 0.15f))
         ) {
+            val progressBrush = if (isTransitioning) {
+                Brush.horizontalGradient(
+                    colors = listOf(
+                        KinemaxAccent,
+                        Color(0xFFFF4081),
+                        KinemaxAccent
+                    )
+                )
+            } else {
+                Brush.horizontalGradient(listOf(KinemaxAccent, KinemaxAccent))
+            }
+
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progressFraction)
-                    .height(2.dp)
-                    .background(KinemaxAccent)
+                    .fillMaxWidth(animatedProgressFraction)
+                    .height(2.5.dp)
+                    .background(progressBrush)
             )
         }
 
@@ -83,14 +116,47 @@ fun MiniPlayerBar(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            AsyncImage(
-                model = song.portadaUrl,
-                contentDescription = "Portada mini player",
+            Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-                contentScale = ContentScale.Crop
-            )
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(KinemaxSurface),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isTransitioning && fromSong != null) {
+                    AsyncImage(
+                        model = fromSong.portadaUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = (1f - crossfadeProgress).coerceIn(0f, 1f)
+                                scaleX = 1f + (crossfadeProgress * 0.08f)
+                                scaleY = 1f + (crossfadeProgress * 0.08f)
+                            },
+                        contentScale = ContentScale.Crop
+                    )
+                    AsyncImage(
+                        model = song.portadaUrl,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                alpha = crossfadeProgress.coerceIn(0f, 1f)
+                                scaleX = 0.92f + (crossfadeProgress * 0.08f)
+                                scaleY = 0.92f + (crossfadeProgress * 0.08f)
+                            },
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    AsyncImage(
+                        model = song.portadaUrl,
+                        contentDescription = "Portada mini player",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.width(10.dp))
 

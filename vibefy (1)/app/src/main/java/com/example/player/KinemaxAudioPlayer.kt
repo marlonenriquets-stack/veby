@@ -32,6 +32,16 @@ enum class RepeatMode {
     OFF, ALL, ONE
 }
 
+data class CrossfadeTransitionInfo(
+    val title: String,
+    val description: String,
+    val durationSeconds: Int,
+    val isDj: Boolean = false,
+    val fromSong: Song? = null,
+    val toSong: Song? = null,
+    val timestamp: Long = System.currentTimeMillis()
+)
+
 @OptIn(UnstableApi::class)
 class KinemaxAudioPlayer(
     private val context: Context,
@@ -69,7 +79,19 @@ class KinemaxAudioPlayer(
     private val _isSpeakingDj = MutableStateFlow(false)
     val isSpeakingDj: StateFlow<Boolean> = _isSpeakingDj.asStateFlow()
 
+    private val _djStyle = MutableStateFlow("Radio FM Enérgico")
+    val djStyle: StateFlow<String> = _djStyle.asStateFlow()
+
     var crossfadeSeconds: Int = 0
+
+    private val _crossfadeTransition = MutableStateFlow<CrossfadeTransitionInfo?>(null)
+    val crossfadeTransition: StateFlow<CrossfadeTransitionInfo?> = _crossfadeTransition.asStateFlow()
+
+    private val _crossfadeProgress = MutableStateFlow(1f)
+    val crossfadeProgress: StateFlow<Float> = _crossfadeProgress.asStateFlow()
+
+    private var hasTriggeredAutoTransition = false
+    private var isCrossfading = false
 
     private var playlist: List<Song> = emptyList()
     private var currentIndex: Int = -1
@@ -191,6 +213,7 @@ class KinemaxAudioPlayer(
                     when (state) {
                         Player.STATE_READY -> {
                             _durationMs.value = primaryPlayer.duration.coerceAtLeast(1L)
+                            _progressMs.value = primaryPlayer.currentPosition.coerceAtLeast(0L)
                             try {
                                 KinemaxEqualizerManager.attachToSession(primaryPlayer.audioSessionId)
                             } catch (_: Exception) {}
@@ -210,6 +233,8 @@ class KinemaxAudioPlayer(
                         currentIndex = newIndex
                         val song = playlist[currentIndex]
                         _currentSong.value = song
+                        _progressMs.value = 0L
+                        _durationMs.value = (song.duracionSeconds * 1000L).coerceAtLeast(1L)
                         refreshQueueState()
                         onSongStartedCallback?.invoke(song)
                         scope.launch(Dispatchers.IO) {
@@ -229,7 +254,21 @@ class KinemaxAudioPlayer(
         }
     }
 
-    fun playSong(song: Song, newPlaylist: List<Song> = emptyList()) {
+    fun setDjStyle(style: String) {
+        _djStyle.value = style
+    }
+
+    fun playSong(song: Song, newPlaylist: List<Song> = emptyList(), isAutoTransition: Boolean = false) {
+        // Solo reseteamos la bandera en llamadas MANUALES (usuario tocó una canción,
+        // le dio a siguiente/anterior). Si viene del propio sistema de auto-transición
+        // (crossfade que arranca antes de que termine la canción), NO la reseteamos aquí
+        // — si no, se borra a sí misma antes de cumplir su función, y el evento natural
+        // de "canción terminada" que llega segundos después puede disparar OTRO next(),
+        // saltándose canciones de golpe. Se resetea correctamente en onTrackEnded().
+        if (!isAutoTransition) {
+            hasTriggeredAutoTransition = false
+        }
+
         if (newPlaylist.isNotEmpty()) {
             playlist = newPlaylist
             currentIndex = playlist.indexOfFirst { it.id == song.id }
@@ -246,6 +285,8 @@ class KinemaxAudioPlayer(
 
         if (currentIndex < 0) currentIndex = 0
         _currentSong.value = song
+        _progressMs.value = 0L
+        _durationMs.value = (song.duracionSeconds * 1000L).coerceAtLeast(1L)
         refreshQueueState()
 
         if (_isDjModeActive.value) {
@@ -261,20 +302,27 @@ class KinemaxAudioPlayer(
                         duckVolume(primaryPlayer, hasta = 0.15f, durationMs = 500L)
                     }
 
+                    val nextSongCandidate = playlist.getOrNull(currentIndex + 1)
+                    val currentStyle = _djStyle.value
+
                     val introRes = try {
-                        GeminiAiService.generateDjIntro(song.titulo, song.artista, song.generoNombre)
+                        GeminiAiService.generateSmartDjCommentary(
+                            currentSong = song,
+                            nextSong = nextSongCandidate,
+                            djStyle = currentStyle
+                        )
                     } catch (e: Exception) {
                         Log.e("KinemaxAudioPlayer", "Gemini DJ intro generation failed", e)
                         Result.failure(e)
                     }
 
-                    val introText = introRes.getOrDefault("¡Hola! Disfruta de ${song.titulo} de ${song.artista}.")
+                    val introText = introRes.getOrDefault("¡Hola vibers! A continuación escucharemos ${song.titulo} de ${song.artista}.")
 
                     if (djSpeaker == null) {
                         djSpeaker = DjSpeaker(context)
                     }
 
-                    djSpeaker?.speak(introText) {
+                    djSpeaker?.speak(introText, djStyle = currentStyle) {
                         _isSpeakingDj.value = false
                         // Mezcla hacia la nueva canción — usa el crossfade manual del usuario
                         // si es mayor, o un mínimo de 3s propio del modo DJ para que siempre mezcle.
@@ -305,30 +353,56 @@ class KinemaxAudioPlayer(
 
     private fun executePlaySongInternal(song: Song, forceCrossfadeSeconds: Int? = null) {
         try {
+            val previousSong = _currentSong.value
+            _currentSong.value = song
+            _progressMs.value = 0L
+            _durationMs.value = (song.duracionSeconds * 1000L).coerceAtLeast(1L)
+
             val targetMediaItem = songToMediaItem(song)
             val mediaItems = playlist.map { songToMediaItem(it) }
             val efectiveCrossfadeSeconds = forceCrossfadeSeconds ?: crossfadeSeconds
 
             if (efectiveCrossfadeSeconds > 0 && primaryPlayer.isPlaying) {
+                isCrossfading = true
+                _crossfadeProgress.value = 0f
+                val isDj = _isDjModeActive.value
+                val transitionTitle = if (isDj) "🎧 Transición DJ en Vivo" else "🎛️ Mezclando (Crossfade ${efectiveCrossfadeSeconds}s)"
+                val transitionDesc = if (previousSong != null && previousSong.id != song.id) {
+                    "De ${previousSong.titulo} ➔ ${song.titulo}"
+                } else {
+                    "Mezclando entrada: ${song.titulo}"
+                }
+
+                _crossfadeTransition.value = CrossfadeTransitionInfo(
+                    title = transitionTitle,
+                    description = transitionDesc,
+                    durationSeconds = efectiveCrossfadeSeconds,
+                    isDj = isDj,
+                    fromSong = previousSong,
+                    toSong = song
+                )
+
                 // Perform Crossfade between primaryPlayer and secondaryPlayer
                 secondaryPlayer.setMediaItems(mediaItems, currentIndex, 0L)
                 secondaryPlayer.prepare()
                 secondaryPlayer.volume = 0f
                 secondaryPlayer.play()
 
+                _isPlaying.value = true
+                startProgressTracker()
+
                 val durationMs = efectiveCrossfadeSeconds * 1000L
-                val steps = 20
+                val steps = 30
                 val delayMs = durationMs / steps
 
                 scope.launch {
-                    // Si veníamos de un "ducking" del modo DJ, el volumen de primaryPlayer
-                    // ya está bajo (ej. 0.15) — el fade-out parte de donde esté, no de 1f,
-                    // para que la mezcla se sienta continua en vez de dar un salto de volumen.
                     val volumenInicialPrimary = primaryPlayer.volume
                     for (i in 1..steps) {
                         val progreso = i.toFloat() / steps
                         primaryPlayer.volume = volumenInicialPrimary * (1f - progreso)
                         secondaryPlayer.volume = progreso
+                        _crossfadeProgress.value = progreso
+                        _progressMs.value = secondaryPlayer.currentPosition.coerceAtLeast(0L)
                         delay(delayMs)
                     }
                     primaryPlayer.stop()
@@ -340,14 +414,37 @@ class KinemaxAudioPlayer(
                     primaryPlayer = secondaryPlayer
                     secondaryPlayer = temp
 
+                    isCrossfading = false
+                    _crossfadeProgress.value = 1f
+                    _isPlaying.value = primaryPlayer.isPlaying
+                    _progressMs.value = primaryPlayer.currentPosition.coerceAtLeast(0L)
+                    _durationMs.value = primaryPlayer.duration.coerceAtLeast(1L)
+
+                    // primaryPlayer.stop() (arriba) no dispara STATE_ENDED de forma natural,
+                    // así que onTrackEnded() nunca llega a "consumir" la bandera en este caso.
+                    // La reseteamos aquí para que la SIGUIENTE canción sí pueda auto-transicionar
+                    // — si no, después de la primera mezcla automática, todas las siguientes
+                    // quedarían bloqueadas para siempre por !hasTriggeredAutoTransition.
+                    hasTriggeredAutoTransition = false
+
                     mediaSession?.player = primaryPlayer
                     KinemaxEqualizerManager.attachToSession(primaryPlayer.audioSessionId)
+                    startProgressTracker()
+
+                    // Keep transition banner briefly visible after crossfade completes
+                    delay(2500L)
+                    if (_crossfadeTransition.value?.toSong?.id == song.id) {
+                        _crossfadeTransition.value = null
+                    }
                 }
             } else {
+                isCrossfading = false
                 primaryPlayer.volume = 1f
                 primaryPlayer.setMediaItems(mediaItems, currentIndex, 0L)
                 primaryPlayer.prepare()
                 primaryPlayer.play()
+                _isPlaying.value = true
+                startProgressTracker()
             }
 
             // Start PlaybackService so system media session is active
@@ -380,7 +477,7 @@ class KinemaxAudioPlayer(
         }
     }
 
-    fun next() {
+    fun next(isAutoTransition: Boolean = false) {
         if (playlist.isEmpty()) return
         if (_repeatMode.value == RepeatMode.ONE) {
             seekTo(0)
@@ -396,7 +493,7 @@ class KinemaxAudioPlayer(
 
         val nextSong = playlist.getOrNull(nextIndex)
         if (nextSong != null) {
-            playSong(nextSong)
+            playSong(nextSong, isAutoTransition = isAutoTransition)
         }
     }
 
@@ -437,6 +534,10 @@ class KinemaxAudioPlayer(
     }
 
     private fun onTrackEnded() {
+        if (hasTriggeredAutoTransition) {
+            hasTriggeredAutoTransition = false
+            return
+        }
         when (_repeatMode.value) {
             RepeatMode.ONE -> {
                 seekTo(0)
@@ -459,9 +560,36 @@ class KinemaxAudioPlayer(
         stopProgressTracker()
         progressJob = scope.launch {
             while (true) {
-                _progressMs.value = primaryPlayer.currentPosition
-                _durationMs.value = primaryPlayer.duration.coerceAtLeast(1L)
-                delay(500)
+                val activePlayer = if (isCrossfading) secondaryPlayer else primaryPlayer
+                val currentPos = activePlayer.currentPosition
+                val duration = activePlayer.duration
+                if (currentPos >= 0) {
+                    _progressMs.value = currentPos
+                }
+                if (duration > 0) {
+                    _durationMs.value = duration
+                }
+
+                // Check auto-transition / crossfade near the end of track
+                val effectiveCrossfadeSec = if (_isDjModeActive.value) maxOf(crossfadeSeconds, 4) else crossfadeSeconds
+                val effectiveCrossfadeMs = effectiveCrossfadeSec * 1000L
+
+                if (effectiveCrossfadeMs > 0 &&
+                    !hasTriggeredAutoTransition &&
+                    !isCrossfading &&
+                    _repeatMode.value != RepeatMode.ONE &&
+                    duration > 5000L &&
+                    currentPos > 0L &&
+                    (duration - currentPos) in 1L..effectiveCrossfadeMs
+                ) {
+                    if (currentIndex < playlist.size - 1 || _repeatMode.value == RepeatMode.ALL || _isShuffle.value) {
+                        hasTriggeredAutoTransition = true
+                        Log.d("KinemaxAudioPlayer", "Triggering automatic DJ transition/crossfade near track end")
+                        next(isAutoTransition = true)
+                    }
+                }
+
+                delay(200)
             }
         }
     }
