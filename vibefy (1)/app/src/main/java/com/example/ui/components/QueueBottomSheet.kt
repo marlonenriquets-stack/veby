@@ -58,13 +58,13 @@ fun QueueBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 24.dp)
+                .padding(start = 0.dp, top = 0.dp, end = 0.dp, bottom = 24.dp)
         ) {
             Text(
                 text = "Cola de reproducción",
                 style = MaterialTheme.typography.titleLarge,
                 color = MaterialTheme.colorScheme.onBackground,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
+                modifier = Modifier.padding(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 8.dp)
             )
 
             if (currentSong != null) {
@@ -72,7 +72,7 @@ fun QueueBottomSheet(
                     text = "Reproduciendo ahora",
                     style = MaterialTheme.typography.labelMedium,
                     color = KinemaxTextSecondary,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(start = 20.dp, top = 6.dp, end = 20.dp, bottom = 6.dp)
                 )
                 QueueRow(
                     song = currentSong,
@@ -87,7 +87,7 @@ fun QueueBottomSheet(
                     text = "A continuación",
                     style = MaterialTheme.typography.labelMedium,
                     color = KinemaxTextSecondary,
-                    modifier = Modifier.padding(horizontal = 20.dp, top = 12.dp, bottom = 6.dp)
+                    modifier = Modifier.padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 6.dp)
                 )
                 LazyColumn(modifier = Modifier.heightIn(max = 420.dp)) {
                     items(queue) { song ->
@@ -104,7 +104,7 @@ fun QueueBottomSheet(
                     text = "No hay más canciones en la cola. Agrega algunas desde el catálogo.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = KinemaxTextSecondary,
-                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 20.dp)
+                    modifier = Modifier.padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp)
                 )
             }
         }
@@ -122,7 +122,7 @@ private fun QueueRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(enabled = !isCurrent) { onClick() }
-            .padding(horizontal = 20.dp, vertical = 8.dp),
+            .padding(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(
