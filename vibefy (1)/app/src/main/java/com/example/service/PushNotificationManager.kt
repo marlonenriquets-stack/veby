@@ -7,14 +7,12 @@ import com.onesignal.debug.LogLevel
 import com.onesignal.notifications.INotificationClickEvent
 import com.onesignal.notifications.INotificationClickListener
 
-class PushNotificationManager(private val context: Context) {
+object PushNotificationManager {
 
-    companion object {
-        private const val TAG = "PushNotificationManager"
-        private const val ONESIGNAL_APP_ID = "YOUR_ONESIGNAL_APP_ID"
-    }
+    private const val TAG = "PushNotificationManager"
+    private const val ONESIGNAL_APP_ID = "YOUR_ONESIGNAL_APP_ID"
 
-    fun init() {
+    fun init(context: Context) {
         try {
             OneSignal.Debug.logLevel = LogLevel.VERBOSE
             OneSignal.initWithContext(context, ONESIGNAL_APP_ID)
