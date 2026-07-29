@@ -76,8 +76,7 @@ class AuthInterceptor : Interceptor {
             }
 
             val combinedPath = ("$currentBasePath/$relativePath")
-                .replace("//+", "/")
-                .replace("/api/api/", "/api/")
+                .replace(Regex("/{2,}"), "/")
             val cleanPath = if (combinedPath.startsWith("/")) combinedPath else "/$combinedPath"
 
             val newUrl = oldUrl.newBuilder()
