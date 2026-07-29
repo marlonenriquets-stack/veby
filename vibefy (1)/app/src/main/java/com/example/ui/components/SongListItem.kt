@@ -116,16 +116,11 @@ fun SongListItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            val artistId = song.mainArtistId
-            Text(
-                text = "${song.displayArtist} • ${song.album ?: "Single"}",
+            ArtistCreditsText(
+                song = song,
+                suffix = song.album ?: "Single",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (artistId != null && onArtistClick != null) KinemaxAccent else KinemaxTextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = if (artistId != null && onArtistClick != null) {
-                    Modifier.clickable { onArtistClick(artistId) }
-                } else Modifier
+                onArtistClick = onArtistClick
             )
         }
 

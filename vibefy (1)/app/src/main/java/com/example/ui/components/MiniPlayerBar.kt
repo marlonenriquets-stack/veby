@@ -1,8 +1,6 @@
 package com.example.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,14 +18,12 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -37,7 +33,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.Song
+import com.example.ui.theme.KinemaxAccent
+import com.example.ui.theme.KinemaxSurfaceVariant
+import com.example.ui.theme.KinemaxTextSecondary
 
+/**
+ * Mini-reproductor estilo Spotify: barra sólida y plana a todo el ancho
+ * (no una tarjeta flotante con degradado), con una línea de progreso
+ * delgada pegada al borde superior — el detalle característico de Spotify.
+ */
 @Composable
 fun MiniPlayerBar(
     song: Song,
@@ -54,50 +58,47 @@ fun MiniPlayerBar(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
-            .clip(RoundedCornerShape(20.dp))
-            .background(
-                brush = Brush.horizontalGradient(
-                    colors = listOf(
-                        Color(0xFF8B5CF6),
-                        Color(0xFF7C3AED),
-                        Color(0xFF6D28D9)
-                    )
-                )
-            )
-            .border(
-                border = BorderStroke(1.dp, Color(0x33FFFFFF)),
-                shape = RoundedCornerShape(20.dp)
-            )
+            .background(KinemaxSurfaceVariant)
             .clickable { onBarClick() }
             .testTag("mini_player_bar")
     ) {
+        // Línea de progreso pegada arriba, a todo el ancho — como en Spotify
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(2.dp)
+                .background(Color.White.copy(alpha = 0.15f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(progressFraction)
+                    .height(2.dp)
+                    .background(KinemaxAccent)
+            )
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Album art
             AsyncImage(
                 model = song.portadaUrl,
                 contentDescription = "Portada mini player",
                 modifier = Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(10.dp)),
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(4.dp)),
                 contentScale = ContentScale.Crop
             )
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
-            // Title & Artist
-            Column(
-                modifier = Modifier.weight(1f)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = song.titulo,
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.SemiBold,
                         fontSize = 14.sp
                     ),
                     color = Color.White,
@@ -107,13 +108,12 @@ fun MiniPlayerBar(
                 Text(
                     text = song.artista,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xCCFFFFFF),
+                    color = KinemaxTextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
 
-            // Play / Pause Button
             IconButton(
                 onClick = onPlayPauseClick,
                 modifier = Modifier.testTag("mini_player_play_pause")
@@ -126,7 +126,6 @@ fun MiniPlayerBar(
                 )
             }
 
-            // Next Button
             IconButton(
                 onClick = onNextClick,
                 modifier = Modifier.testTag("mini_player_next")
@@ -134,20 +133,10 @@ fun MiniPlayerBar(
                 Icon(
                     imageVector = Icons.Default.SkipNext,
                     contentDescription = "Siguiente",
-                    tint = Color(0xCCFFFFFF),
+                    tint = Color.White,
                     modifier = Modifier.size(26.dp)
                 )
             }
         }
-
-        // Bottom progress bar
-        LinearProgressIndicator(
-            progress = { progressFraction },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(3.dp),
-            color = Color.White,
-            trackColor = Color(0x33FFFFFF)
-        )
     }
 }

@@ -1,6 +1,7 @@
 package com.example.service
 
 import android.util.Log
+import com.example.BuildConfig
 import com.example.data.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -14,7 +15,7 @@ import java.util.concurrent.TimeUnit
 
 object GeminiAiService {
 
-    private const val MODEL_NAME = "gemini-1.5-flash"
+    private const val MODEL_NAME = "gemini-3.5-flash"
     private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/$MODEL_NAME:generateContent"
 
     private val okHttpClient = OkHttpClient.Builder()
@@ -23,11 +24,27 @@ object GeminiAiService {
         .writeTimeout(60, TimeUnit.SECONDS)
         .build()
 
-    private fun getApiKey(): String {
-        return "AIzaSyDemoKeyVibefyGeminiApi2026"
+    /**
+     * Devuelve la API key real configurada, o null si no hay ninguna configurada.
+     * Ya NO cae en una key falsa — es preferible un error claro a una llamada
+     * que siempre va a fallar en silencio contra la API real de Google.
+     */
+    private fun getApiKey(): String? {
+        return try {
+            val key = BuildConfig.GEMINI_API_KEY
+            if (key.isNullOrBlank() || key == "TU_GEMINI_API_KEY_AQUI" || key == "MY_GEMINI_API_KEY") {
+                null
+            } else key
+        } catch (e: Exception) {
+            null
+        }
     }
 
-    private fun String?.isNull_or_empty(): Boolean = this == null || this.trim().isEmpty()
+    private val sinApiKeyError = Exception(
+        "Gemini API key no configurada. Copia .env.example a .env y pon tu key real " +
+        "(gratis en https://aistudio.google.com/apikey), o si estás en AI Studio revisa " +
+        "la sección de secretos del proyecto."
+    )
 
     /**
      * Explicar esta canción: Explicación breve de la temática, contexto y curiosidades.
@@ -46,7 +63,7 @@ object GeminiAiService {
             if (responseText.isNotBlank()) {
                 Result.success(responseText)
             } else {
-                Result.failure(Exception("Respuesta vacía de la IA"))
+                Result.failure(Exception("Gemini devolvió una respuesta vacía. Intenta de nuevo."))
             }
         } catch (e: Exception) {
             Log.e("GeminiAiService", "Error in explainSong", e)
@@ -80,34 +97,52 @@ object GeminiAiService {
                 - Género: '${currentSong.generoNombre}'
 
                 Lista de candidatos REALES disponibles en la plataforma Vibefy (JSON):
-                ${candidatesJsonArray.toString()}
+                ${candidatesJsonArray}
 
-                MANDATO STRICTO: Selecciona entre 3 y 5 canciones de la lista de candidatos que mejor combinen con la canción actual por género, ritmo o vibra.
-                NO INVENTES canciones fuera de la lista de candidatos. Retorna ÚNICAMENTE un arreglo JSON de números enteros con los IDs de las canciones elegidas.
-                Ejemplo de formato de respuesta esperada: [102, 105, 103]
+                MANDATO ESTRICTO: Selecciona entre 3 y 5 canciones de la lista de candidatos que mejor combinen con la canción actual por género, ritmo o vibra.
+                NO INVENTES canciones fuera de la lista de candidatos.
             """.trimIndent()
 
-            val responseText = callGeminiApi(prompt)
-            val cleanJson = responseText.substringAfter("[").substringBeforeLast("]")
-            val selectedIds = mutableListOf<Long>()
+            // Fuerza a Gemini a responder JSON puro (sin ```json ni texto extra alrededor),
+            // usando un schema estricto en vez de parsear texto libre.
+            val responseText = callGeminiApi(
+                prompt = prompt,
+                jsonSchema = JSONObject().apply {
+                    put("type", "ARRAY")
+                    put("items", JSONObject().put("type", "INTEGER"))
+                }
+            )
 
-            cleanJson.split(",").map { it.trim() }.forEach { idStr ->
-                idStr.toLongOrNull()?.let { selectedIds.add(it) }
+            val selectedIds = mutableListOf<Long>()
+            try {
+                val arr = JSONArray(responseText)
+                for (i in 0 until arr.length()) {
+                    selectedIds.add(arr.optLong(i))
+                }
+            } catch (e: Exception) {
+                // Respaldo por si el modelo no siguió el schema al pie de la letra
+                responseText.substringAfter("[").substringBeforeLast("]")
+                    .split(",").map { it.trim() }
+                    .forEach { idStr -> idStr.toLongOrNull()?.let { selectedIds.add(it) } }
             }
 
             val recommendedSongs = candidateCatalog.filter { selectedIds.contains(it.id) }
             if (recommendedSongs.isNotEmpty()) {
                 Result.success(recommendedSongs)
             } else {
-                // Fallback to filtering candidates by genre
+                // Respaldo: filtra candidatos por mismo género si Gemini no devolvió nada usable
                 val fallback = candidateCatalog.filter {
-                    it.id != currentSong.id && (it.generoNombre.equals(currentSong.generoNombre, ignoreCase = true))
-                }.take(3)
+                    it.id != currentSong.id && it.generoNombre.equals(currentSong.generoNombre, ignoreCase = true)
+                }.take(5)
                 Result.success(fallback)
             }
         } catch (e: Exception) {
             Log.e("GeminiAiService", "Error in getSmartRecommendations", e)
-            Result.failure(e)
+            // Ante error de red/API, igual intenta dar algo útil por género en vez de dejar la pantalla vacía
+            val fallback = candidateCatalog.filter {
+                it.id != currentSong.id && it.generoNombre.equals(currentSong.generoNombre, ignoreCase = true)
+            }.take(5)
+            if (fallback.isNotEmpty()) Result.success(fallback) else Result.failure(e)
         }
     }
 
@@ -138,28 +173,38 @@ object GeminiAiService {
             }
         } catch (e: Exception) {
             Log.e("GeminiAiService", "Error generating DJ intro", e)
+            // El modo DJ nunca debe romper la reproducción: si Gemini falla, sigue con un intro genérico.
             Result.success("¡Estás en Vibefy! Disfruta de $songTitle de $artist.")
         }
     }
 
-    private fun callGeminiApi(prompt: String): String {
-        val apiKey = getApiKey()
+    /**
+     * @param jsonSchema si se manda, fuerza a Gemini a responder JSON válido siguiendo ese
+     * esquema (responseMimeType application/json), evitando el problema típico de que el
+     * modelo envuelva el JSON en backticks de markdown y rompa el parseo.
+     */
+    private fun callGeminiApi(prompt: String, jsonSchema: JSONObject? = null): String {
+        val apiKey = getApiKey() ?: throw sinApiKeyError
         val requestUrl = "$BASE_URL?key=$apiKey"
 
         val jsonBody = JSONObject().apply {
             val contents = JSONArray().apply {
                 val contentObj = JSONObject().apply {
                     val parts = JSONArray().apply {
-                        val partObj = JSONObject().apply {
-                            put("text", prompt)
-                        }
-                        put(partObj)
+                        put(JSONObject().put("text", prompt))
                     }
                     put("parts", parts)
                 }
                 put(contentObj)
             }
             put("contents", contents)
+
+            if (jsonSchema != null) {
+                put("generationConfig", JSONObject().apply {
+                    put("responseMimeType", "application/json")
+                    put("responseSchema", jsonSchema)
+                })
+            }
         }
 
         val request = Request.Builder()
@@ -172,7 +217,7 @@ object GeminiAiService {
 
         if (!response.isSuccessful) {
             Log.e("GeminiAiService", "API call failed code ${response.code}: $responseBodyString")
-            return ""
+            throw Exception("Gemini respondió HTTP ${response.code}: ${responseBodyString.take(300)}")
         }
 
         val jsonResponse = JSONObject(responseBodyString)
@@ -184,6 +229,12 @@ object GeminiAiService {
             if (parts != null && parts.length() > 0) {
                 return parts.getJSONObject(0).optString("text", "")
             }
+        }
+
+        // Si Gemini bloqueó la respuesta (safety filters) u otra causa, dilo explícitamente
+        val blockReason = jsonResponse.optJSONObject("promptFeedback")?.optString("blockReason")
+        if (!blockReason.isNullOrBlank()) {
+            throw Exception("Gemini bloqueó la respuesta: $blockReason")
         }
         return ""
     }

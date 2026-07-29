@@ -132,6 +132,7 @@ fun KinemaxNavGraph(
     val favoriteSongs by viewModel.favoriteSongs.collectAsState()
     val downloadedSongs by viewModel.downloadedSongs.collectAsState()
     val playlists by viewModel.playlists.collectAsState()
+    val subscriptionPlans by viewModel.subscriptionPlans.collectAsState()
 
     // Show Toast for login info message if present
     androidx.compose.runtime.LaunchedEffect(loginToastMessage) {
@@ -360,8 +361,15 @@ fun KinemaxNavGraph(
     // Premium Upgrade Dialog for Free users
     PremiumDialog(
         isOpen = showPremiumDialog,
+        plans = subscriptionPlans,
         onDismiss = { viewModel.dismissPremiumDialog() },
-        onUpgrade = { viewModel.dismissPremiumDialog() }
+        onSelectPlan = { plan ->
+            val sku = plan.googlePlayProductId
+            if (activity != null && !sku.isNullOrBlank()) {
+                viewModel.purchasePlan(activity, sku)
+            }
+            viewModel.dismissPremiumDialog()
+        }
     )
 
     // Add To Playlist Dialog

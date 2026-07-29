@@ -264,19 +264,12 @@ fun FullPlayerBottomSheet(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        val mainArtistId = song.mainArtistId
-                        Text(
-                            text = song.displayArtist,
+                        ArtistCreditsText(
+                            song = song,
                             style = MaterialTheme.typography.titleMedium,
-                            color = if (mainArtistId != null && onArtistClick != null) KinemaxAccent else KinemaxTextSecondary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = if (mainArtistId != null && onArtistClick != null) {
-                                Modifier.clickable {
-                                    onDismiss()
-                                    onArtistClick(mainArtistId)
-                                }
-                            } else Modifier
+                            onArtistClick = onArtistClick?.let { callback ->
+                                { id -> onDismiss(); callback(id) }
+                            }
                         )
                     }
 

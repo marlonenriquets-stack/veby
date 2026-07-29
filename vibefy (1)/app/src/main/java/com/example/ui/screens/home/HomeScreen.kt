@@ -35,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,6 +83,23 @@ fun HomeScreen(
         "todo" to "Todo"
     )
 
+    val saludo = remember {
+        val hora = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        when {
+            hora < 12 -> "Buenos días"
+            hora < 19 -> "Buenas tardes"
+            else -> "Buenas noches"
+        }
+    }
+
+    // Artistas para la fila de "Artistas destacados", derivados del catálogo ya cargado
+    val artistasDestacados = remember(catalog) {
+        catalog.flatMap { it.artistas ?: emptyList() }
+            .filter { it.rol == "principal" }
+            .distinctBy { it.id }
+            .take(12)
+    }
+
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -99,8 +117,8 @@ fun HomeScreen(
             ) {
                 Column {
                     Text(
-                        text = "¡Hola, ${user?.nombre?.ifEmpty { "Melómano" } ?: "Bienvenido"}!",
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
+                        text = "$saludo${user?.nombre?.let { if (it.isNotBlank()) ", ${it.substringBefore(" ")}" else "" } ?: ""}",
+                        style = MaterialTheme.typography.headlineMedium,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
@@ -249,6 +267,89 @@ fun HomeScreen(
             }
         }
 
+        // Quick Picks Grid (estilo Spotify: acceso directo de 2 columnas)
+        if (topSongs.isNotEmpty()) {
+            item {
+                val quickPicks = topSongs.take(6)
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                    val rows = quickPicks.chunked(2)
+                    rows.forEach { rowSongs ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            rowSongs.forEach { song ->
+                                QuickPickTile(
+                                    song = song,
+                                    isPlaying = isPlaying && currentPlayingSong?.id == song.id,
+                                    onClick = { onSongClick(song, quickPicks) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            if (rowSongs.size == 1) Spacer(modifier = Modifier.weight(1f))
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                    }
+                }
+            }
+        }
+
+        // Section: Artistas destacados
+        if (artistasDestacados.isNotEmpty()) {
+            item {
+                Text(
+                    text = "Artistas destacados",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 8.dp)
+                )
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    items(artistasDestacados, key = { it.id }) { artista ->
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .width(84.dp)
+                                .clickable { onArtistClick?.invoke(artista.id) }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(76.dp)
+                                    .clip(CircleShape)
+                                    .background(KinemaxSurface),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (!artista.fotoUrl.isNullOrBlank()) {
+                                    AsyncImage(
+                                        model = artista.fotoUrl,
+                                        contentDescription = artista.nombre,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.size(76.dp).clip(CircleShape)
+                                    )
+                                } else {
+                                    Text(
+                                        text = artista.nombre.take(1).uppercase(),
+                                        style = MaterialTheme.typography.headlineSmall,
+                                        color = KinemaxTextSecondary
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Text(
+                                text = artista.nombre,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Section: "Más escuchadas"
         item {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -339,6 +440,38 @@ fun HomeScreen(
 }
 
 @Composable
+private fun QuickPickTile(
+    song: Song,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clip(RoundedCornerShape(6.dp))
+            .background(if (isPlaying) KinemaxAccent.copy(alpha = 0.25f) else KinemaxSurface)
+            .clickable { onClick() }
+            .testTag("quick_pick_${song.id}"),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AsyncImage(
+            model = song.portadaUrl,
+            contentDescription = song.titulo,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.size(56.dp)
+        )
+        Text(
+            text = song.titulo,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(horizontal = 10.dp)
+        )
+    }
+}
+
+@Composable
 private fun TopSongCard(
     song: Song,
     isPlaying: Boolean,
@@ -347,12 +480,8 @@ private fun TopSongCard(
     Column(
         modifier = Modifier
             .width(148.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(8.dp))
             .background(KinemaxSurface)
-            .border(
-                border = BorderStroke(1.dp, if (isPlaying) KinemaxAccent else Color(0x1AFFFFFF)),
-                shape = RoundedCornerShape(20.dp)
-            )
             .clickable { onClick() }
             .padding(12.dp)
             .testTag("top_song_card_${song.id}")
@@ -360,7 +489,7 @@ private fun TopSongCard(
         Box(
             modifier = Modifier
                 .size(124.dp)
-                .clip(RoundedCornerShape(14.dp)),
+                .clip(RoundedCornerShape(6.dp)),
             contentAlignment = Alignment.Center
         ) {
             AsyncImage(
