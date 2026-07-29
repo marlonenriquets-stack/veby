@@ -1,5 +1,8 @@
-package com.example.ui.navigation
+package com.example.ui.navigation                                                                                                                                              
 
+ import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import android.app.Activity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
