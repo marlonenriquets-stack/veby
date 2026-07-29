@@ -30,10 +30,14 @@ object PushNotificationManager {
         }
     }
 
-    fun loginUser(userId: String) {
+    // Acepta 1 o 2 parámetros opcionales
+    fun loginUser(userId: String, email: String? = null) {
         try {
             OneSignal.login(userId)
-            Log.d(TAG, "Usuario registrado en OneSignal: $userId")
+            if (!email.isNull_orEmpty()) {
+                OneSignal.User.addEmail(email)
+            }
+            Log.d(TAG, "Usuario registrado en OneSignal: $userId ($email)")
         } catch (e: Exception) {
             Log.e(TAG, "Error al registrar usuario en OneSignal", e)
         }
