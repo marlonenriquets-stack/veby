@@ -1,9 +1,7 @@
-package com.example.ui.navigation                                                                                                                                              
+package com.example.ui.navigation
 
- import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
 import android.app.Activity
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,16 +31,18 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -57,17 +57,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.ArtistAlbum
 import com.example.data.model.Song
 import com.example.service.RemoteConfigManager
 import com.example.ui.MainViewModel
-import androidx.compose.ui.zIndex
+import com.example.ui.components.AddToPlaylistDialog
+import com.example.ui.components.AiChatBottomSheet
 import com.example.ui.components.FullPlayerBottomSheet
-import com.example.ui.components.InAppNotificationBanner
-import com.example.ui.components.NotificationsCenterBottomSheet
 import com.example.ui.components.MiniPlayerBar
 import com.example.ui.components.PremiumDialog
 import com.example.ui.components.QueueBottomSheet
-import com.example.data.model.ArtistAlbum
 import com.example.ui.screens.artist.AlbumDetailScreen
 import com.example.ui.screens.artist.ArtistProfileScreen
 import com.example.ui.screens.auth.LoginRegisterScreen
@@ -75,6 +74,7 @@ import com.example.ui.screens.home.HomeScreen
 import com.example.ui.screens.library.LibraryScreen
 import com.example.ui.screens.profile.ProfileScreen
 import com.example.ui.screens.search.SearchScreen
+import com.example.ui.screens.settings.AudioSettingsScreen
 import com.example.ui.theme.KinemaxAccent
 import com.example.ui.theme.KinemaxBackground
 import com.example.ui.theme.KinemaxSurface
@@ -92,6 +92,7 @@ sealed class NavDestination(
     object Profile : NavDestination("profile", "Perfil", Icons.Filled.Person, Icons.Outlined.Person)
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KinemaxNavGraph(
     viewModel: MainViewModel,
@@ -126,10 +127,7 @@ fun KinemaxNavGraph(
     val albumes by viewModel.albumes.collectAsState()
     val selectedAlbumDetail by viewModel.selectedAlbumDetail.collectAsState()
 
-    // Cuando se abre un álbum desde Inicio, lo convertimos al mismo modelo
-    // (ArtistAlbum) que ya usa AlbumDetailScreen para los álbumes de un artista,
-    // así reusamos la misma pantalla sin duplicar UI.
-    androidx.compose.runtime.LaunchedEffect(selectedAlbumDetail) {
+    LaunchedEffect(selectedAlbumDetail) {
         selectedAlbumDetail?.let { detalle ->
             selectedAlbum = ArtistAlbum(
                 nombre = detalle.nombre,
@@ -167,10 +165,9 @@ fun KinemaxNavGraph(
     val playlists by viewModel.playlists.collectAsState()
     val subscriptionPlans by viewModel.subscriptionPlans.collectAsState()
 
-    // Show Toast for login info message if present
-    androidx.compose.runtime.LaunchedEffect(loginToastMessage) {
+    LaunchedEffect(loginToastMessage) {
         loginToastMessage?.let { msg ->
-            android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
         }
     }
 
@@ -196,12 +193,6 @@ fun KinemaxNavGraph(
     val isPlayerExpanded by viewModel.isPlayerExpanded.collectAsState()
     val showPremiumDialog by viewModel.showPremiumDialog.collectAsState()
 
-    // Notification State
-    val inAppNotifications by viewModel.inAppNotifications.collectAsState()
-    val currentNotificationBanner by viewModel.currentNotificationBanner.collectAsState()
-    val unreadNotificationCount by viewModel.unreadNotificationCount.collectAsState()
-    val showNotificationsCenter by viewModel.showNotificationsCenter.collectAsState()
-
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = KinemaxBackground,
@@ -211,7 +202,6 @@ fun KinemaxNavGraph(
                     .navigationBarsPadding()
                     .testTag("bottom_nav_area")
             ) {
-                // Persistent MiniPlayerBar if song is active
                 AnimatedVisibility(
                     visible = currentPlayingSong != null && !isPlayerExpanded && !showAudioSettings,
                     enter = fadeIn(),
@@ -232,7 +222,6 @@ fun KinemaxNavGraph(
                     }
                 }
 
-                // Bottom Navigation Bar
                 if (!showAudioSettings) {
                     NavigationBar(
                         containerColor = KinemaxSurface,
@@ -284,7 +273,6 @@ fun KinemaxNavGraph(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-
             if (selectedAlbum != null) {
                 AlbumDetailScreen(
                     album = selectedAlbum!!,
@@ -318,7 +306,7 @@ fun KinemaxNavGraph(
                     onAlbumClick = { album -> selectedAlbum = album }
                 )
             } else if (showAudioSettings) {
-                com.example.ui.screens.settings.AudioSettingsScreen(
+                AudioSettingsScreen(
                     crossfadeSeconds = crossfadeSeconds,
                     selectedPreset = eqPreset,
                     audioQuality = audioQuality,
@@ -370,7 +358,7 @@ fun KinemaxNavGraph(
                         onFavoriteClick = { viewModel.toggleFavorite(it) },
                         onDownloadClick = { viewModel.downloadSong(it) },
                         onAddToPlaylistClick = { selectedSongForPlaylistDialog = it },
-                    onAddToQueueClick = { viewModel.addToQueue(it) },
+                        onAddToQueueClick = { viewModel.addToQueue(it) },
                         onArtistClick = onArtistClick
                     )
                     NavDestination.Library -> LibraryScreen(
@@ -400,7 +388,6 @@ fun KinemaxNavGraph(
         }
     }
 
-    // Full Screen Player Overlay Sheet
     FullPlayerBottomSheet(
         isVisible = isPlayerExpanded,
         song = currentPlayingSong,
@@ -430,8 +417,7 @@ fun KinemaxNavGraph(
         onQueueClick = { viewModel.showQueue() }
     )
 
-    // Interactive AI Chat Assistant Sheet
-    com.example.ui.components.AiChatBottomSheet(
+    AiChatBottomSheet(
         isVisible = showAiChatSheet,
         messages = chatMessages,
         isLoading = isAiChatLoading,
@@ -442,7 +428,6 @@ fun KinemaxNavGraph(
         onAddToQueue = { song -> viewModel.addToQueue(song) }
     )
 
-    // Cola de reproducción
     val showQueueSheet by viewModel.showQueueSheet.collectAsState()
     val queueSongs by viewModel.queue.collectAsState()
     if (showQueueSheet) {
@@ -456,7 +441,6 @@ fun KinemaxNavGraph(
         )
     }
 
-    // Premium Upgrade Dialog for Free users
     PremiumDialog(
         isOpen = showPremiumDialog,
         plans = subscriptionPlans,
@@ -470,9 +454,8 @@ fun KinemaxNavGraph(
         }
     )
 
-    // Add To Playlist Dialog
     selectedSongForPlaylistDialog?.let { song ->
-        com.example.ui.components.AddToPlaylistDialog(
+        AddToPlaylistDialog(
             song = song,
             playlists = playlists,
             onDismiss = { selectedSongForPlaylistDialog = null },
@@ -487,7 +470,6 @@ fun KinemaxNavGraph(
         )
     }
 
-    // Network / API Error Popup
     val errorMessage by viewModel.errorMessage.collectAsState()
     if (errorMessage != null) {
         AlertDialog(
