@@ -32,6 +32,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -59,6 +60,7 @@ import com.example.ui.MainViewModel
 import com.example.ui.components.FullPlayerBottomSheet
 import com.example.ui.components.MiniPlayerBar
 import com.example.ui.components.PremiumDialog
+import com.example.ui.components.QueueBottomSheet
 import com.example.data.model.ArtistAlbum
 import com.example.ui.screens.artist.AlbumDetailScreen
 import com.example.ui.screens.artist.ArtistProfileScreen
@@ -141,7 +143,7 @@ fun KinemaxNavGraph(
         }
     }
 
-    val currentPlayingSong by viewModel.audioPlayer.currentSong.collectAsState()
+    val currentPlayingSong by viewModel.currentPlayingSong.collectAsState()
     val isPlaying by viewModel.audioPlayer.isPlaying.collectAsState()
     val progressMs by viewModel.audioPlayer.progressMs.collectAsState()
     val durationMs by viewModel.audioPlayer.durationMs.collectAsState()
@@ -247,7 +249,8 @@ fun KinemaxNavGraph(
                     onSongClick = { song, playlist -> viewModel.playSong(song, playlist, activity) },
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
                     onDownloadClick = { viewModel.downloadSong(it) },
-                    onAddToPlaylistClick = { selectedSongForPlaylistDialog = it }
+                    onAddToPlaylistClick = { selectedSongForPlaylistDialog = it },
+                    onAddToQueueClick = { viewModel.addToQueue(it) }
                 )
             } else if (selectedArtistId != null) {
                 ArtistProfileScreen(
@@ -264,6 +267,7 @@ fun KinemaxNavGraph(
                     onFavoriteClick = { viewModel.toggleFavorite(it) },
                     onDownloadClick = { viewModel.downloadSong(it) },
                     onAddToPlaylistClick = { selectedSongForPlaylistDialog = it },
+                    onAddToQueueClick = { viewModel.addToQueue(it) },
                     onAlbumClick = { album -> selectedAlbum = album }
                 )
             } else if (showAudioSettings) {
@@ -289,6 +293,7 @@ fun KinemaxNavGraph(
                         onFavoriteClick = { viewModel.toggleFavorite(it) },
                         onDownloadClick = { viewModel.downloadSong(it) },
                         onAddToPlaylistClick = { selectedSongForPlaylistDialog = it },
+                    onAddToQueueClick = { viewModel.addToQueue(it) },
                         onArtistClick = onArtistClick
                     )
                     NavDestination.Search -> SearchScreen(
@@ -303,6 +308,7 @@ fun KinemaxNavGraph(
                         onFavoriteClick = { viewModel.toggleFavorite(it) },
                         onDownloadClick = { viewModel.downloadSong(it) },
                         onAddToPlaylistClick = { selectedSongForPlaylistDialog = it },
+                    onAddToQueueClick = { viewModel.addToQueue(it) },
                         onArtistClick = onArtistClick
                     )
                     NavDestination.Library -> LibraryScreen(
@@ -355,8 +361,23 @@ fun KinemaxNavGraph(
         onDownloadClick = { viewModel.downloadSong(it) },
         onToggleDjMode = { viewModel.audioPlayer.toggleDjMode() },
         onRecommendationsClick = { viewModel.generateSmartRecommendations(activity) },
-        onArtistClick = onArtistClick
+        onArtistClick = onArtistClick,
+        onQueueClick = { viewModel.showQueue() }
     )
+
+    // Cola de reproducción
+    val showQueueSheet by viewModel.showQueueSheet.collectAsState()
+    val queueSongs by viewModel.queue.collectAsState()
+    if (showQueueSheet) {
+        QueueBottomSheet(
+            currentSong = currentPlayingSong,
+            queue = queueSongs,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            onDismiss = { viewModel.dismissQueue() },
+            onPlayFromQueue = { viewModel.playFromQueue(it) },
+            onRemoveFromQueue = { viewModel.removeFromQueue(it) }
+        )
+    }
 
     // Premium Upgrade Dialog for Free users
     PremiumDialog(

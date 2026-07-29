@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.PlayArrow
@@ -53,6 +54,7 @@ fun SongListItem(
     onFavoriteClick: ((Song) -> Unit)? = null,
     onDownloadClick: ((Song) -> Unit)? = null,
     onAddToPlaylistClick: ((Song) -> Unit)? = null,
+    onAddToQueueClick: ((Song) -> Unit)? = null,
     onArtistClick: ((Long) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -133,6 +135,21 @@ fun SongListItem(
                 Icon(
                     imageVector = Icons.Default.PlaylistAdd,
                     contentDescription = "Agregar a Playlist",
+                    tint = KinemaxTextSecondary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+        }
+
+        // Add To Queue Button
+        if (onAddToQueueClick != null) {
+            IconButton(
+                onClick = { onAddToQueueClick(song) },
+                modifier = Modifier.testTag("add_to_queue_btn_${song.id}")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.QueueMusic,
+                    contentDescription = "Agregar a la cola",
                     tint = KinemaxTextSecondary,
                     modifier = Modifier.size(22.dp)
                 )

@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -66,10 +67,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Home / Catalog state
     private val _topSongs = MutableStateFlow<List<Song>>(emptyList())
-    val topSongs: StateFlow<List<Song>> = _topSongs.asStateFlow()
-
     private val _catalog = MutableStateFlow<List<Song>>(emptyList())
-    val catalog: StateFlow<List<Song>> = _catalog.asStateFlow()
+
+    // Se combinan con favoriteSongsFlow para que song.isFavorite (y por lo
+    // tanto el corazón en la UI) siempre refleje el estado real guardado
+    // localmente — antes se quedaba pegado en "false" para siempre porque
+    // el catálogo del servidor nunca sabe cuáles son tus favoritos.
+    val topSongs: StateFlow<List<Song>> = combine(_topSongs, repository.favoriteSongsFlow) { songs, favs ->
+        val favIds = favs.map { it.id }.toSet()
+        songs.map { it.copy(isFavorite = it.id in favIds) }
+    }.stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
+
+    val catalog: StateFlow<List<Song>> = combine(_catalog, repository.favoriteSongsFlow) { songs, favs ->
+        val favIds = favs.map { it.id }.toSet()
+        songs.map { it.copy(isFavorite = it.id in favIds) }
+    }.stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = emptyList())
 
     private val _generos = MutableStateFlow<List<Genre>>(emptyList())
     val generos: StateFlow<List<Genre>> = _generos.asStateFlow()
@@ -106,6 +118,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         initialValue = emptyList()
     )
 
+    // La canción sonando ahora, con isFavorite sincronizado — para que el
+    // corazón del reproductor completo también refleje el estado real.
+    val currentPlayingSong: StateFlow<Song?> = combine(audioPlayer.currentSong, repository.favoriteSongsFlow) { song, favs ->
+        song?.copy(isFavorite = favs.any { it.id == song.id })
+    }.stateIn(scope = viewModelScope, started = SharingStarted.WhileSubscribed(5000), initialValue = null)
+
     val downloadedSongs: StateFlow<List<Song>> = repository.downloadedSongsFlow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
@@ -129,6 +147,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Premium upgrade dialog
     private val _showPremiumDialog = MutableStateFlow(false)
     val showPremiumDialog: StateFlow<Boolean> = _showPremiumDialog.asStateFlow()
+
+    private val _showQueueSheet = MutableStateFlow(false)
+    val showQueueSheet: StateFlow<Boolean> = _showQueueSheet.asStateFlow()
+
+    /** Cola de reproducción (canciones que siguen), ya sincronizada con ExoPlayer. */
+    val queue: StateFlow<List<Song>> = audioPlayer.queue
+
+    fun showQueue() { _showQueueSheet.value = true }
+    fun dismissQueue() { _showQueueSheet.value = false }
+    fun addToQueue(song: Song) = audioPlayer.addToQueue(song)
+    fun removeFromQueue(song: Song) = audioPlayer.removeFromQueue(song)
+    fun playFromQueue(song: Song) = audioPlayer.playFromQueue(song)
 
     init {
         // Observe crossfade setting

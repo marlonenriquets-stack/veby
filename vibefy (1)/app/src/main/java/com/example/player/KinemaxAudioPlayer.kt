@@ -74,6 +74,73 @@ class KinemaxAudioPlayer(
     private var playlist: List<Song> = emptyList()
     private var currentIndex: Int = -1
 
+    private val _queue = MutableStateFlow<List<Song>>(emptyList())
+    /** Canciones que siguen después de la que está sonando ahora ("A continuación"). */
+    val queue: StateFlow<List<Song>> = _queue.asStateFlow()
+
+    private fun refreshQueueState() {
+        _queue.value = if (currentIndex in playlist.indices) {
+            playlist.subList(currentIndex + 1, playlist.size)
+        } else emptyList()
+    }
+
+    /** Agrega una canción justo después de la que está sonando (para que suene a continuación). */
+    fun addToQueue(song: Song) {
+        if (currentIndex < 0) {
+            playSong(song, listOf(song))
+            return
+        }
+        val insertAt = (currentIndex + 1).coerceAtMost(playlist.size)
+        playlist = playlist.toMutableList().apply { add(insertAt, song) }
+        try {
+            primaryPlayer.addMediaItem(insertAt, songToMediaItem(song))
+        } catch (e: Exception) {
+            Log.e("KinemaxAudioPlayer", "No se pudo sincronizar addToQueue con ExoPlayer", e)
+        }
+        refreshQueueState()
+    }
+
+    /** Quita una canción de la cola (no afecta la que está sonando). */
+    fun removeFromQueue(song: Song) {
+        val index = playlist.withIndex().firstOrNull { (idx, s) -> idx > currentIndex && s.id == song.id }?.index
+        if (index != null) {
+            playlist = playlist.toMutableList().apply { removeAt(index) }
+            try {
+                primaryPlayer.removeMediaItem(index)
+            } catch (e: Exception) {
+                Log.e("KinemaxAudioPlayer", "No se pudo sincronizar removeFromQueue con ExoPlayer", e)
+            }
+            refreshQueueState()
+        }
+    }
+
+    /** Salta directo a una canción específica de la cola. */
+    fun playFromQueue(song: Song) {
+        val index = playlist.indexOfFirst { it.id == song.id }
+        if (index != -1) {
+            currentIndex = index
+            _currentSong.value = song
+            refreshQueueState()
+            executePlaySongInternal(song)
+        }
+    }
+
+    private fun songToMediaItem(s: Song): MediaItem {
+        val uri = if (s.isDownloaded && !s.localAudioPath.isNullOrEmpty()) Uri.parse(s.localAudioPath) else Uri.parse(s.audioUrl)
+        return MediaItem.Builder()
+            .setMediaId(s.id.toString())
+            .setUri(uri)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(s.titulo)
+                    .setArtist(s.artista)
+                    .setAlbumTitle(s.album ?: "")
+                    .setArtworkUri(if (!s.portadaUrl.isNullOrEmpty()) Uri.parse(s.portadaUrl) else null)
+                    .build()
+            )
+            .build()
+    }
+
     var onSongStartedCallback: ((Song) -> Unit)? = null
 
     init {
@@ -143,6 +210,7 @@ class KinemaxAudioPlayer(
                         currentIndex = newIndex
                         val song = playlist[currentIndex]
                         _currentSong.value = song
+                        refreshQueueState()
                         onSongStartedCallback?.invoke(song)
                         scope.launch(Dispatchers.IO) {
                             repository.registrarReproduccion(song.id)
@@ -178,13 +246,20 @@ class KinemaxAudioPlayer(
 
         if (currentIndex < 0) currentIndex = 0
         _currentSong.value = song
+        refreshQueueState()
 
         if (_isDjModeActive.value) {
-            // Modo DJ IA active: Speak intro before starting track
+            // Modo DJ IA activo: en vez de pausar en seco, baja el volumen de la
+            // canción anterior (ducking, como haría un DJ de radio real) mientras
+            // habla encima, y luego MEZCLA hacia la nueva canción con crossfade.
             scope.launch {
                 try {
                     _isSpeakingDj.value = true
-                    try { primaryPlayer.pause() } catch (_: Exception) {}
+
+                    val estabaSonando = primaryPlayer.isPlaying
+                    if (estabaSonando) {
+                        duckVolume(primaryPlayer, hasta = 0.15f, durationMs = 500L)
+                    }
 
                     val introRes = try {
                         GeminiAiService.generateDjIntro(song.titulo, song.artista, song.generoNombre)
@@ -201,7 +276,10 @@ class KinemaxAudioPlayer(
 
                     djSpeaker?.speak(introText) {
                         _isSpeakingDj.value = false
-                        executePlaySongInternal(song)
+                        // Mezcla hacia la nueva canción — usa el crossfade manual del usuario
+                        // si es mayor, o un mínimo de 3s propio del modo DJ para que siempre mezcle.
+                        val crossfadeDjSegundos = maxOf(crossfadeSeconds, 3)
+                        executePlaySongInternal(song, forceCrossfadeSeconds = if (estabaSonando) crossfadeDjSegundos else 0)
                     }
                 } catch (e: Exception) {
                     Log.e("KinemaxAudioPlayer", "Error during DJ mode flow", e)
@@ -214,60 +292,43 @@ class KinemaxAudioPlayer(
         }
     }
 
-    private fun executePlaySongInternal(song: Song) {
+    /** Baja el volumen de un reproductor de forma suave (ducking), sin pausarlo. */
+    private suspend fun duckVolume(player: ExoPlayer, hasta: Float, durationMs: Long) {
+        val steps = 10
+        val delayMs = durationMs / steps
+        val volumenInicial = player.volume
+        for (i in 1..steps) {
+            player.volume = volumenInicial - (volumenInicial - hasta) * (i.toFloat() / steps)
+            delay(delayMs)
+        }
+    }
+
+    private fun executePlaySongInternal(song: Song, forceCrossfadeSeconds: Int? = null) {
         try {
-            val mediaUri = if (song.isDownloaded && !song.localAudioPath.isNullOrEmpty()) {
-                Uri.parse(song.localAudioPath)
-            } else {
-                Uri.parse(song.audioUrl)
-            }
+            val targetMediaItem = songToMediaItem(song)
+            val mediaItems = playlist.map { songToMediaItem(it) }
+            val efectiveCrossfadeSeconds = forceCrossfadeSeconds ?: crossfadeSeconds
 
-            val targetMediaItem = MediaItem.Builder()
-                .setMediaId(song.id.toString())
-                .setUri(mediaUri)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(song.titulo)
-                        .setArtist(song.artista)
-                        .setAlbumTitle(song.album ?: "")
-                        .setArtworkUri(if (!song.portadaUrl.isNullOrEmpty()) Uri.parse(song.portadaUrl) else null)
-                        .build()
-                )
-                .build()
-
-            val mediaItems = playlist.map { s ->
-                val uri = if (s.isDownloaded && !s.localAudioPath.isNullOrEmpty()) Uri.parse(s.localAudioPath) else Uri.parse(s.audioUrl)
-                MediaItem.Builder()
-                    .setMediaId(s.id.toString())
-                    .setUri(uri)
-                    .setMediaMetadata(
-                        MediaMetadata.Builder()
-                            .setTitle(s.titulo)
-                            .setArtist(s.artista)
-                            .setAlbumTitle(s.album ?: "")
-                            .setArtworkUri(if (!s.portadaUrl.isNullOrEmpty()) Uri.parse(s.portadaUrl) else null)
-                            .build()
-                    )
-                    .build()
-            }
-
-            if (crossfadeSeconds > 0 && primaryPlayer.isPlaying) {
+            if (efectiveCrossfadeSeconds > 0 && primaryPlayer.isPlaying) {
                 // Perform Crossfade between primaryPlayer and secondaryPlayer
                 secondaryPlayer.setMediaItems(mediaItems, currentIndex, 0L)
                 secondaryPlayer.prepare()
                 secondaryPlayer.volume = 0f
                 secondaryPlayer.play()
 
-                val durationMs = crossfadeSeconds * 1000L
+                val durationMs = efectiveCrossfadeSeconds * 1000L
                 val steps = 20
                 val delayMs = durationMs / steps
 
                 scope.launch {
+                    // Si veníamos de un "ducking" del modo DJ, el volumen de primaryPlayer
+                    // ya está bajo (ej. 0.15) — el fade-out parte de donde esté, no de 1f,
+                    // para que la mezcla se sienta continua en vez de dar un salto de volumen.
+                    val volumenInicialPrimary = primaryPlayer.volume
                     for (i in 1..steps) {
-                        val fadeOut = 1f - (i.toFloat() / steps)
-                        val fadeIn = i.toFloat() / steps
-                        primaryPlayer.volume = fadeOut
-                        secondaryPlayer.volume = fadeIn
+                        val progreso = i.toFloat() / steps
+                        primaryPlayer.volume = volumenInicialPrimary * (1f - progreso)
+                        secondaryPlayer.volume = progreso
                         delay(delayMs)
                     }
                     primaryPlayer.stop()

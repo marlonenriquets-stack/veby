@@ -57,6 +57,7 @@ fun AlbumDetailScreen(
     onFavoriteClick: (Song) -> Unit,
     onDownloadClick: (Song) -> Unit,
     onAddToPlaylistClick: (Song) -> Unit,
+    onAddToQueueClick: ((Song) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val songs = album.songList
@@ -197,7 +198,8 @@ fun AlbumDetailScreen(
                         onSongClick = { onSongClick(song, songs) },
                         onFavoriteClick = onFavoriteClick,
                         onDownloadClick = onDownloadClick,
-                        onAddToPlaylistClick = onAddToPlaylistClick
+                        onAddToPlaylistClick = onAddToPlaylistClick,
+                        onAddToQueueClick = onAddToQueueClick
                     )
                 }
             }

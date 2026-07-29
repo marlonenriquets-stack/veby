@@ -66,6 +66,7 @@ fun SearchScreen(
     onFavoriteClick: (Song) -> Unit,
     onDownloadClick: (Song) -> Unit,
     onAddToPlaylistClick: ((Song) -> Unit)? = null,
+    onAddToQueueClick: ((Song) -> Unit)? = null,
     onArtistClick: ((Long) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -252,6 +253,7 @@ fun SearchScreen(
                         onFavoriteClick = onFavoriteClick,
                         onDownloadClick = onDownloadClick,
                         onAddToPlaylistClick = onAddToPlaylistClick,
+                        onAddToQueueClick = onAddToQueueClick,
                         onArtistClick = onArtistClick,
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
                     )

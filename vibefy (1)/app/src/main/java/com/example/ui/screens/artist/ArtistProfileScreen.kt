@@ -66,6 +66,7 @@ fun ArtistProfileScreen(
     onFavoriteClick: (Song) -> Unit,
     onDownloadClick: (Song) -> Unit,
     onAddToPlaylistClick: (Song) -> Unit,
+    onAddToQueueClick: ((Song) -> Unit)? = null,
     onAlbumClick: (ArtistAlbum) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -274,7 +275,8 @@ fun ArtistProfileScreen(
                                 onSongClick = { onSongClick(song, topSongs) },
                                 onFavoriteClick = onFavoriteClick,
                                 onDownloadClick = onDownloadClick,
-                                onAddToPlaylistClick = onAddToPlaylistClick
+                                onAddToPlaylistClick = onAddToPlaylistClick,
+                                onAddToQueueClick = onAddToQueueClick
                             )
                         }
                     }

@@ -99,6 +99,7 @@ fun FullPlayerBottomSheet(
     onExplainSongClick: () -> Unit = {},
     onRecommendationsClick: () -> Unit = {},
     onArtistClick: ((Long) -> Unit)? = null,
+    onQueueClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showExplainSheet by remember { mutableStateOf(false) }
@@ -389,6 +390,26 @@ fun FullPlayerBottomSheet(
                             },
                             contentDescription = "Repetir",
                             tint = if (repeatMode != RepeatMode.OFF) KinemaxAccent else KinemaxTextSecondary
+                        )
+                    }
+                }
+
+                if (onQueueClick != null) {
+                    androidx.compose.material3.TextButton(
+                        onClick = onQueueClick,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.QueueMusic,
+                            contentDescription = "Cola de reproducción",
+                            tint = KinemaxTextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.padding(horizontal = 4.dp))
+                        Text(
+                            text = "Ver cola de reproducción",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = KinemaxTextSecondary
                         )
                     }
                 }
